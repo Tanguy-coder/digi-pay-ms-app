@@ -1,0 +1,19 @@
+
+spring:
+  application:
+    name: customer-service
+  datasource:
+    url: jdbc:h2:mem:customer-db
+  cloud:
+    config:
+      discovery:
+        enabled: false
+      enabled: false
+  h2:
+    console:
+      enabled: true
+eureka:
+  client:
+    enabled: false
+server:
+  port: 8082
