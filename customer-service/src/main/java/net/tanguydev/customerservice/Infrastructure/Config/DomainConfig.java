@@ -4,6 +4,7 @@ import net.tanguydev.customerservice.Domain.Ports.CustomerServiceInterface;
 import net.tanguydev.customerservice.Domain.UseCases.CreateCustomerUseCase;
 import net.tanguydev.customerservice.Domain.UseCases.FindCustomerByIdUseCase;
 import net.tanguydev.customerservice.Domain.UseCases.ListCustomerUseCase;
+import net.tanguydev.customerservice.Domain.UseCases.UpdateCustomerUseCase;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,5 +23,10 @@ public class DomainConfig {
     @Bean
     public FindCustomerByIdUseCase findCustomerByIdUseCase(CustomerServiceInterface customerService) {
         return new FindCustomerByIdUseCase(customerService);
+    }
+
+    @Bean
+    public UpdateCustomerUseCase updateCustomerUseCase(CustomerServiceInterface customerService) {
+        return new UpdateCustomerUseCase(customerService);
     }
 }
