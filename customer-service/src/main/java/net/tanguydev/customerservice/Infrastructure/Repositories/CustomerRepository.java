@@ -32,12 +32,12 @@ public class CustomerRepository implements CustomerRepositoryInterface {
 
     @Override
     public Optional<DomainCustomer> findByEmail(String email) {
-        return null;
+        return this.customerJpaRepository.findByEmail(email).map(customerMapper::toDomain);
     }
 
     @Override
     public Optional<DomainCustomer> findByPhoneNumber(String phoneNumber) {
-        return null;
+        return this.customerJpaRepository.findByPhoneNumber(phoneNumber).map(customerMapper::toDomain);
     }
 
     @Override
