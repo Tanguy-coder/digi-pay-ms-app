@@ -1,0 +1,14 @@
+Test customer avec kafka pret
+docker compose up kafka -d
+
+  # 2. Lancer l'app
+  cd customer-service && ./mvnw spring-boot:run
+
+  # 3. Créer un customer
+  curl -X POST http://localhost:8082/api/v1/customers -H "Content-Type: application/json" -d
+  '{"firstName":"Test","lastName":"Kafka","email":"test@mail.com","phoneNumber":"+22899000000","nationality":"TGO","addressLine1":"Rue
+  1","city":"Lome","country":"Togo","preferredCurrency":"XOF"}'
+
+  # 4. Vérifier le message dans Kafka
+  docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic customer-events --from-beginning --timeout-ms 5000
+
