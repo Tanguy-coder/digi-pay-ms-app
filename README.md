@@ -46,7 +46,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | Microservice | Responsabilites | Publie (Events) | Consomme (Events) |
 |---|---|---|---|
 | **Customer MS** | Creation client · KYC · Infos personnelles | `customer.created` `customer.updated` `customer.verified` | — |
-| **Wallet MS** | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` |
+| **Wallet MS** | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` `wallet.amount_frozen` | `customer.created` |
 | **Payment MS** | Paiements marchands · Transferts P2P | `payment.initiated` `payment.completed` `payment.failed` | `wallet.debited` `wallet.credited` |
 | **Fraud Detection MS** | Regles anti-fraude · Score de risque · Alertes | `fraud.detected` `fraud.cleared` | `payment.initiated` |
 | **Notification MS** | Email · SMS · Push | — | `payment.completed` `payment.failed` `wallet.credited` |
@@ -103,11 +103,11 @@ Transfert 500$ de A vers B :
 | Domaine | Technologie |
 |---|---|
 | Backend | Spring Boot 4.1.0 (Java 21) |
-| Messaging | Apache Kafka |
+| Messaging | Apache Kafka 3.9+ |
 | Service Discovery | Eureka (Spring Cloud) |
 | API Gateway | Spring Cloud Gateway |
 | Configuration | Spring Cloud Config |
-| Base de donnees | PostgreSQL (par service) |
+| Base de donnees | PostgreSQL (par service) · H2 (dev) |
 | Cache | Redis (sessions, idempotency, rate limiting) |
 | Observabilite | Prometheus + Grafana |
 | Tracing distribue | Zipkin / Micrometer |
@@ -115,7 +115,7 @@ Transfert 500$ de A vers B :
 | Conteneurisation | Docker + Docker Compose |
 | Mapping objets | MapStruct 1.5.5 |
 | Resilience | Resilience4j |
-| Tests | JUnit 5, Testcontainers |
+| Tests | JUnit 5, Mockito, Testcontainers |
 
 ## Architecture logicielle (par service)
 
@@ -126,6 +126,7 @@ service/
 ├── Domain/                          # Coeur metier (zero dependance framework)
 │   ├── Entities/                    # Entites metier pures
 │   ├── Enums/                       # Enumerations du domaine
+│   ├── Events/                      # Evenements domaine (Kafka DTOs)
 │   ├── Ports/                       # Interfaces de services (ports de sortie)
 │   ├── Gateways/                    # Abstractions de persistance
 │   ├── Presenters/                  # Interfaces de presentation
@@ -134,93 +135,26 @@ service/
 │   └── Validations/                 # Validation metier custom
 │
 └── Infrastructure/                  # Adaptateurs techniques
-    ├── Adapters/                    # Implementations des ports
-    ├── Config/                      # Configuration Spring (beans)
+    ├── Adapters/                    # Implementations des ports (Service, EventPublisher)
+    ├── Config/                      # Configuration Spring (beans use cases)
+    ├── Consumers/                   # Kafka consumers
     ├── Controllers/                 # API REST
     ├── Mappers/                     # Mapping Domain <-> JPA (MapStruct)
-    ├── Models/                      # Entites JPA / Kafka events
+    ├── Models/                      # Entites JPA
     ├── Presenters/                  # Implementations des presenters
     ├── Repositories/                # Implementations de persistance
-    └── Requests/                    # DTOs d'entree
+    └── Requests/                    # DTOs d'entree (validation Jakarta)
 ```
 
 ## Structure du repository
 
 ```
-digital-payment-platform/
-├── api-gateway/              → Spring Cloud Gateway
-├── config-server/            → Spring Cloud Config
-├── eureka-server/            → Service Discovery
-├── customer-service/         → Customer MS + KYC
-├── wallet-service/           → Wallet MS + Event Sourcing
-├── payment-service/          → Payment MS + Saga
-├── fraud-detection/          → Fraud MS + regles
-├── notification-service/     → Notification MS
-├── settlement-service/       → Settlement MS + compensation
-├── shared-events/            → DTOs + Event schemas partages
-├── docker-compose.yml        → Kafka + DBs + Redis + Zipkin
-└── k8s/                      → Manifests Kubernetes (bonus)
+digi-pay-ms-app/
+├── customer-service/         → Customer MS (port 8082)
+├── wallet-service/           → Wallet MS (port 8083)
+├── docker-compose.yaml       → Kafka + services
+└── README.md
 ```
-
-## Roadmap
-
-| Phase | Semaines | Livrables | Statut |
-|---|---|---|---|
-| Phase 1 | S1-S2 | Infrastructure Docker + Kafka + Eureka + Config Server + Gateway | En cours |
-| Phase 2 | S3-S4 | Customer MS (KYC) + Wallet MS (Event Sourcing) + topics Kafka | En cours |
-| Phase 3 | S5-S6 | Payment MS + Saga Pattern + Idempotency + Redis | A venir |
-| Phase 4 | S7-S8 | Fraud Detection MS + Settlement MS + compensation nette | A venir |
-| Phase 5 | S9-S10 | Notification MS + Prometheus + Zipkin + Dashboards | A venir |
-| Phase 6 | S11-S12 | Tests de charge · Chaos Engineering · Documentation · CI/CD | A venir |
-
----
-
-## Avancement actuel — Phase 2
-
-### Customer Service (en developpement)
-
-Le premier microservice est fonctionnel avec :
-
-**Implemente :**
-- Entite domaine `DomainCustomer` (decouple de JPA)
-- Enums metier : `AccountStatus`, `KycStatus`, `TierLevel`
-- Use cases : `CreateCustomer`, `FindCustomerById`, `ListCustomers`
-- Validation domaine custom (email, E.164, ISO 3 lettres, risk score)
-- Entite JPA `Customer` avec contraintes et index
-- Mapping MapStruct (Domain <-> JPA)
-- Repository avec pattern adapter
-- Controller REST `GET /api/v1/customers`
-- Configuration Spring Cloud (Eureka + Config desactives en local)
-- Dockerfile + Docker Compose
-- Swagger UI (SpringDoc OpenAPI)
-
-**Endpoints :**
-
-| Methode | URL | Statut |
-|---|---|---|
-| GET | `/api/v1/customers` | Implemente |
-| GET | `/api/v1/customers/{id}` | Use case pret, controller a cabler |
-| POST | `/api/v1/customers` | Use case pret, controller a cabler |
-| PUT | `/api/v1/customers/{id}` | Interface definie |
-
-**Modele metier Customer :**
-- Identite : nom, email, telephone (E.164)
-- Localisation : adresse, ville, pays, nationalite (ISO 3 lettres)
-- KYC : `NOT_SUBMITTED` → `PENDING` → `VERIFIED` / `REJECTED`
-- Risk score : 0.00 - 100.00
-- Tier : `BASIC` · `STANDARD` · `PREMIUM` · `VIP`
-- Devise par defaut : XOF (franc CFA)
-
-### Reste a faire (court terme)
-
-- [ ] Cabler les endpoints POST et GET/{id} dans le controller
-- [ ] Implementer `findByEmail` et `findByPhoneNumber` dans le repository
-- [ ] Implementer le use case `UpdateCustomer`
-- [ ] Ajouter la gestion d'erreurs globale (exception handler)
-- [ ] Ecrire les tests unitaires et d'integration
-- [ ] Publier les evenements Kafka (`customer.created`, `customer.updated`, `customer.verified`)
-- [ ] Demarrer le Wallet Service (consommateur de `customer.created`)
-- [ ] Mettre en place l'infrastructure (Kafka, Eureka, Config Server, Gateway)
 
 ## Demarrage rapide
 
@@ -228,26 +162,140 @@ Le premier microservice est fonctionnel avec :
 
 - Java 21+
 - Maven 3.9+
-- Docker (PostgreSQL, Kafka)
+- Docker (pour Kafka)
 
-### Lancer le Customer Service en dev
+### 1. Demarrer Kafka
+
+```bash
+docker compose up kafka -d
+```
+
+### 2. Lancer le Customer Service
 
 ```bash
 cd customer-service
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 L'application demarre sur le port **8082** avec une base H2 en memoire.
 
-- API : http://localhost:8082/api/v1/customers
-- Console H2 : http://localhost:8082/h2-console
-- Swagger UI : http://localhost:8082/swagger-ui.html
-
-### Lancer avec Docker Compose
+### 3. Lancer le Wallet Service
 
 ```bash
-docker compose up --build
+cd wallet-service
+mvn spring-boot:run
 ```
+
+L'application demarre sur le port **8083** avec une base H2 en memoire.
+Le consumer Kafka ecoute automatiquement le topic `customer-events`.
+
+### 4. Tester le flux complet
+
+```bash
+# Creer un client (publie customer.created sur Kafka → wallet auto-cree)
+curl -X POST http://localhost:8082/api/v1/customers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Tanguy",
+    "lastName": "Mambafei",
+    "email": "tanguy@example.com",
+    "phoneNumber": "+22890000000",
+    "nationality": "TGO",
+    "addressLine1": "123 Rue de Lome",
+    "city": "Lome",
+    "country": "Togo",
+    "preferredCurrency": "XOF"
+  }'
+
+# Verifier le wallet auto-cree (attendre 2-3s pour la propagation Kafka)
+curl http://localhost:8083/api/v1/wallets/customer/1
+
+# Crediter le wallet
+curl -X POST "http://localhost:8083/api/v1/wallets/1/credit?amount=50000"
+
+# Debiter le wallet
+curl -X POST "http://localhost:8083/api/v1/wallets/1/debit?amount=15000"
+
+# Geler un montant
+curl -X POST "http://localhost:8083/api/v1/wallets/1/freeze?amount=10000"
+```
+
+### URLs utiles
+
+| Service | URL |
+|---|---|
+| Customer API | http://localhost:8082/api/v1/customers |
+| Wallet API | http://localhost:8083/api/v1/wallets |
+| Customer H2 Console | http://localhost:8082/h2-console |
+| Wallet H2 Console | http://localhost:8083/h2-console |
+
+## Endpoints API
+
+### Customer Service (port 8082)
+
+| Methode | URL | Description |
+|---|---|---|
+| POST | `/api/v1/customers` | Creer un client (publie `customer.created`) |
+| GET | `/api/v1/customers` | Lister les clients |
+| GET | `/api/v1/customers/{id}` | Trouver un client par ID |
+| PUT | `/api/v1/customers/{id}` | Mettre a jour un client |
+
+### Wallet Service (port 8083)
+
+| Methode | URL | Description |
+|---|---|---|
+| POST | `/api/v1/wallets` | Creer un wallet (publie `wallet.created`) |
+| GET | `/api/v1/wallets/{id}` | Trouver par ID |
+| GET | `/api/v1/wallets/customer/{customerId}` | Trouver par client |
+| POST | `/api/v1/wallets/{id}/credit?amount=X` | Crediter (publie `wallet.credited`) |
+| POST | `/api/v1/wallets/{id}/debit?amount=X` | Debiter (publie `wallet.debited`) |
+| POST | `/api/v1/wallets/{id}/freeze?amount=X` | Geler (publie `wallet.amount_frozen`) |
+
+## Communication Kafka entre services
+
+```
+┌──────────────────┐         customer-events         ┌──────────────────┐
+│  Customer Service │ ─────────────────────────────▶ │  Wallet Service   │
+│  (port 8082)      │    customer.created            │  (port 8083)      │
+└──────────────────┘                                 └──────────────────┘
+                                                              │
+                                                              │ wallet-events
+                                                              ▼
+                                                     wallet.created
+                                                     wallet.credited
+                                                     wallet.debited
+                                                     wallet.amount_frozen
+```
+
+**Flux** :
+1. Un client est cree via POST `/api/v1/customers`
+2. Le `CreateCustomerUseCase` publie `customer.created` sur Kafka
+3. Le `CustomerEventConsumer` du wallet-service recoit l'event
+4. Un wallet est automatiquement cree (idempotent) avec la devise preferee du client
+5. L'event `wallet.created` est publie sur `wallet-events`
+
+## Tests
+
+```bash
+# Tests unitaires + integration du wallet-service (21 tests)
+cd wallet-service
+mvn test
+
+# Tests unitaires du customer-service (5 tests)
+cd customer-service
+mvn test -Dtest="CreateCustomerUseCaseTest"
+```
+
+## Roadmap
+
+| Phase | Livrables | Statut |
+|---|---|---|
+| Phase 1 | Infrastructure Docker + Kafka | Termine |
+| Phase 2 | Customer MS + Wallet MS + Kafka events + Tests | Termine |
+| Phase 3 | Payment MS + Saga Pattern + Idempotency + Redis | A venir |
+| Phase 4 | Fraud Detection MS + Settlement MS | A venir |
+| Phase 5 | Notification MS + Prometheus + Zipkin | A venir |
+| Phase 6 | Tests de charge · CI/CD · Documentation | A venir |
 
 ## Approfondissements prevus (Senior+)
 
@@ -258,98 +306,3 @@ docker compose up --build
 - gRPC entre services (queries synchrones haute-performance)
 - Kubernetes (Helm charts, HPA, PodDisruptionBudget)
 - PCI-DSS basics (tokenisation donnees carte, audit logs immuables)
-=======
-# digi-pay-ms-app
-
-
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/microservices6125502/digi-pay-ms-app.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-* [Set up project integrations](https://gitlab.com/microservices6125502/digi-pay-ms-app/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
-

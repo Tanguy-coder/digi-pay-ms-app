@@ -2,6 +2,8 @@ package net.tanguydev.walletservice.Domain.UseCases;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Events.WalletEvent;
+import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.Validations.Exception.InsufficientBalanceException;
 import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotActiveException;
@@ -13,9 +15,12 @@ import java.time.OffsetDateTime;
 public class FreezeAmountUseCase implements FreezeAmountUseCaseInterface {
 
     private final WalletServiceInterface walletService;
+    private final WalletEventPublisherInterface eventPublisher;
 
-    public FreezeAmountUseCase(WalletServiceInterface walletService) {
+    public FreezeAmountUseCase(WalletServiceInterface walletService,
+                               WalletEventPublisherInterface eventPublisher) {
         this.walletService = walletService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -35,6 +40,21 @@ public class FreezeAmountUseCase implements FreezeAmountUseCaseInterface {
         wallet.setFrozenAmount(wallet.getFrozenAmount().add(amount));
         wallet.setUpdatedAt(OffsetDateTime.now());
 
-        return walletService.save(wallet);
+        DomainWallet saved = walletService.save(wallet);
+
+        WalletEvent event = new WalletEvent();
+        event.setEventType("wallet.amount_frozen");
+        event.setWalletId(saved.getId());
+        event.setCustomerId(saved.getCustomerId());
+        event.setCurrency(saved.getCurrency());
+        event.setAmount(amount);
+        event.setBalanceAfter(saved.getBalance());
+        event.setFrozenAmountAfter(saved.getFrozenAmount());
+        event.setStatus(saved.getStatus());
+        event.setOccurredAt(OffsetDateTime.now());
+
+        eventPublisher.publish(event);
+
+        return saved;
     }
 }

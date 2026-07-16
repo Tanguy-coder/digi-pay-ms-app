@@ -2,6 +2,8 @@ package net.tanguydev.walletservice.Domain.UseCases;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Events.WalletEvent;
+import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotActiveException;
 import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotFoundException;
@@ -12,9 +14,12 @@ import java.time.OffsetDateTime;
 public class CreditWalletUseCase implements CreditWalletUseCaseInterface {
 
     private final WalletServiceInterface walletService;
+    private final WalletEventPublisherInterface eventPublisher;
 
-    public CreditWalletUseCase(WalletServiceInterface walletService) {
+    public CreditWalletUseCase(WalletServiceInterface walletService,
+                               WalletEventPublisherInterface eventPublisher) {
         this.walletService = walletService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -29,6 +34,21 @@ public class CreditWalletUseCase implements CreditWalletUseCaseInterface {
         wallet.setBalance(wallet.getBalance().add(amount));
         wallet.setUpdatedAt(OffsetDateTime.now());
 
-        return walletService.save(wallet);
+        DomainWallet saved = walletService.save(wallet);
+
+        WalletEvent event = new WalletEvent();
+        event.setEventType("wallet.credited");
+        event.setWalletId(saved.getId());
+        event.setCustomerId(saved.getCustomerId());
+        event.setCurrency(saved.getCurrency());
+        event.setAmount(amount);
+        event.setBalanceAfter(saved.getBalance());
+        event.setFrozenAmountAfter(saved.getFrozenAmount());
+        event.setStatus(saved.getStatus());
+        event.setOccurredAt(OffsetDateTime.now());
+
+        eventPublisher.publish(event);
+
+        return saved;
     }
 }

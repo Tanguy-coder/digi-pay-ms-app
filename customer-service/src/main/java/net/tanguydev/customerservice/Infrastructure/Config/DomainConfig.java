@@ -1,5 +1,6 @@
 package net.tanguydev.customerservice.Infrastructure.Config;
 
+import net.tanguydev.customerservice.Domain.Ports.CustomerEventPublisherInterface;
 import net.tanguydev.customerservice.Domain.Ports.CustomerServiceInterface;
 import net.tanguydev.customerservice.Domain.UseCases.CreateCustomerUseCase;
 import net.tanguydev.customerservice.Domain.UseCases.FindCustomerByIdUseCase;
@@ -11,8 +12,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class DomainConfig {
     @Bean
-    public CreateCustomerUseCase createCustomerUseCase(CustomerServiceInterface customerService) {
-        return new CreateCustomerUseCase(customerService);
+    public CreateCustomerUseCase createCustomerUseCase(CustomerServiceInterface customerService,
+                                                       CustomerEventPublisherInterface eventPublisher) {
+        return new CreateCustomerUseCase(customerService, eventPublisher);
     }
 
     @Bean

@@ -1,5 +1,6 @@
 package net.tanguydev.walletservice.Infrastructure.Config;
 
+import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.UseCases.*;
 import org.springframework.context.annotation.Bean;
@@ -9,8 +10,9 @@ import org.springframework.context.annotation.Configuration;
 public class DomainConfig {
 
     @Bean
-    public CreateWalletUseCase createWalletUseCase(WalletServiceInterface walletService) {
-        return new CreateWalletUseCase(walletService);
+    public CreateWalletUseCase createWalletUseCase(WalletServiceInterface walletService,
+                                                   WalletEventPublisherInterface eventPublisher) {
+        return new CreateWalletUseCase(walletService, eventPublisher);
     }
 
     @Bean
@@ -24,17 +26,20 @@ public class DomainConfig {
     }
 
     @Bean
-    public CreditWalletUseCase creditWalletUseCase(WalletServiceInterface walletService) {
-        return new CreditWalletUseCase(walletService);
+    public CreditWalletUseCase creditWalletUseCase(WalletServiceInterface walletService,
+                                                   WalletEventPublisherInterface eventPublisher) {
+        return new CreditWalletUseCase(walletService, eventPublisher);
     }
 
     @Bean
-    public DebitWalletUseCase debitWalletUseCase(WalletServiceInterface walletService) {
-        return new DebitWalletUseCase(walletService);
+    public DebitWalletUseCase debitWalletUseCase(WalletServiceInterface walletService,
+                                                 WalletEventPublisherInterface eventPublisher) {
+        return new DebitWalletUseCase(walletService, eventPublisher);
     }
 
     @Bean
-    public FreezeAmountUseCase freezeAmountUseCase(WalletServiceInterface walletService) {
-        return new FreezeAmountUseCase(walletService);
+    public FreezeAmountUseCase freezeAmountUseCase(WalletServiceInterface walletService,
+                                                   WalletEventPublisherInterface eventPublisher) {
+        return new FreezeAmountUseCase(walletService, eventPublisher);
     }
 }

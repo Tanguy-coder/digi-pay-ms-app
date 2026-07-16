@@ -2,18 +2,24 @@ package net.tanguydev.walletservice.Domain.UseCases;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Events.WalletEvent;
+import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.Validations.DomainWalletValidator;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 
 public class CreateWalletUseCase implements CreateWalletUseCaseInterface {
 
     private final WalletServiceInterface walletService;
+    private final WalletEventPublisherInterface eventPublisher;
     private final DomainWalletValidator validator = new DomainWalletValidator();
 
-    public CreateWalletUseCase(WalletServiceInterface walletService) {
+    public CreateWalletUseCase(WalletServiceInterface walletService,
+                               WalletEventPublisherInterface eventPublisher) {
         this.walletService = walletService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -23,6 +29,21 @@ public class CreateWalletUseCase implements CreateWalletUseCaseInterface {
         if (wallet.getStatus() == null) wallet.setStatus(WalletStatus.ACTIVE);
 
         validator.validate(wallet);
-        return walletService.save(wallet);
+        DomainWallet saved = walletService.save(wallet);
+
+        WalletEvent event = new WalletEvent();
+        event.setEventType("wallet.created");
+        event.setWalletId(saved.getId());
+        event.setCustomerId(saved.getCustomerId());
+        event.setCurrency(saved.getCurrency());
+        event.setAmount(null);
+        event.setBalanceAfter(saved.getBalance());
+        event.setFrozenAmountAfter(saved.getFrozenAmount());
+        event.setStatus(saved.getStatus());
+        event.setOccurredAt(OffsetDateTime.now());
+
+        eventPublisher.publish(event);
+
+        return saved;
     }
 }
