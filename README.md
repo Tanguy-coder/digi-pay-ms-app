@@ -208,30 +208,37 @@ docker compose up --build -d
 
 ### 3. Tester le flux complet E2E
 
+Tous les IDs (customer, wallet, payment) sont des **UUID**.
+
 ```bash
-# 1. Creer Alice (publie customer.created → wallet auto-cree)
-curl -s -X POST http://localhost:8082/api/v1/customers \
+# 1. Creer Alice — capturer son UUID
+ALICE_ID=$(curl -s -X POST http://localhost:8082/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "Alice", "lastName": "Dupont",
     "email": "alice@example.com", "phoneNumber": "+22890000001",
     "nationality": "TGO", "addressLine1": "1 Rue de Lome",
     "city": "Lome", "country": "Togo", "preferredCurrency": "XOF"
-  }' | jq .
+  }' | jq -r '.id')
+echo "Alice ID: $ALICE_ID"
 
-# 2. Creer Bob
-curl -s -X POST http://localhost:8082/api/v1/customers \
+# 2. Creer Bob — capturer son UUID
+BOB_ID=$(curl -s -X POST http://localhost:8082/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "Bob", "lastName": "Martin",
     "email": "bob@example.com", "phoneNumber": "+22890000002",
     "nationality": "TGO", "addressLine1": "2 Rue de Lome",
     "city": "Lome", "country": "Togo", "preferredCurrency": "XOF"
-  }' | jq .
+  }' | jq -r '.id')
+echo "Bob ID: $BOB_ID"
 
-# 3. Recuperer les IDs wallet (attendre 2-3s propagation Kafka)
-ALICE_WALLET=$(curl -s http://localhost:8083/api/v1/wallets/customer/<ALICE_ID> | jq -r '.id')
-BOB_WALLET=$(curl -s http://localhost:8083/api/v1/wallets/customer/<BOB_ID> | jq -r '.id')
+# 3. Recuperer les UUIDs des wallets (attendre 2-3s propagation Kafka)
+sleep 3
+ALICE_WALLET=$(curl -s "http://localhost:8083/api/v1/wallets/customer/$ALICE_ID" | jq -r '.id')
+BOB_WALLET=$(curl -s "http://localhost:8083/api/v1/wallets/customer/$BOB_ID" | jq -r '.id')
+echo "Alice Wallet: $ALICE_WALLET"
+echo "Bob Wallet:   $BOB_WALLET"
 
 # 4. Crediter Alice
 curl -s -X POST "http://localhost:8083/api/v1/wallets/$ALICE_WALLET/credit?amount=3000"
@@ -249,8 +256,34 @@ curl -s -X POST http://localhost:8084/api/v1/payments \
   }" | jq .
 
 # 6. Verifier balances (Alice: 2000, Bob: 1000)
-curl -s http://localhost:8083/api/v1/wallets/$ALICE_WALLET | jq '.balance'
-curl -s http://localhost:8083/api/v1/wallets/$BOB_WALLET | jq '.balance'
+curl -s "http://localhost:8083/api/v1/wallets/$ALICE_WALLET" | jq '.balance'
+curl -s "http://localhost:8083/api/v1/wallets/$BOB_WALLET" | jq '.balance'
+
+# 7. Tester l'idempotency (meme cle → 409)
+curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8084/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"senderWalletId\": \"$ALICE_WALLET\",
+    \"receiverWalletId\": \"$BOB_WALLET\",
+    \"amount\": 1000,
+    \"currency\": \"XOF\",
+    \"type\": \"P2P\",
+    \"idempotencyKey\": \"pay-001\"
+  }"
+# Attendu : 409
+
+# 8. Tester le solde insuffisant
+curl -s -X POST http://localhost:8084/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"senderWalletId\": \"$ALICE_WALLET\",
+    \"receiverWalletId\": \"$BOB_WALLET\",
+    \"amount\": 9999,
+    \"currency\": \"XOF\",
+    \"type\": \"P2P\",
+    \"idempotencyKey\": \"pay-002\"
+  }" | jq '{status, failureReason}'
+# Attendu : status FAILED, failureReason "Insufficient balance..."
 ```
 
 ### Scenarios de test valides
@@ -286,29 +319,33 @@ curl -s http://localhost:8083/api/v1/wallets/$BOB_WALLET | jq '.balance'
 
 ### Wallet Service (port 8083)
 
+Tous les `{id}` et `{customerId}` sont des **UUID**.
+
 | Methode | URL | Description |
 |---|---|---|
 | POST | `/api/v1/wallets` | Creer un wallet (publie `wallet.created`) |
-| GET | `/api/v1/wallets/{id}` | Trouver par ID |
-| GET | `/api/v1/wallets/customer/{customerId}` | Trouver par client |
+| GET | `/api/v1/wallets/{id}` | Trouver par UUID |
+| GET | `/api/v1/wallets/customer/{customerId}` | Trouver par UUID client |
 | POST | `/api/v1/wallets/{id}/credit?amount=X` | Crediter (publie `wallet.credited`) |
 | POST | `/api/v1/wallets/{id}/debit?amount=X` | Debiter (publie `wallet.debited`) |
 | POST | `/api/v1/wallets/{id}/freeze?amount=X` | Geler (publie `wallet.amount_frozen`) |
 
 ### Payment Service (port 8084)
 
+Tous les `{id}` et `{walletId}` sont des **UUID**.
+
 | Methode | URL | Description |
 |---|---|---|
 | POST | `/api/v1/payments` | Initier un paiement (Saga + idempotency) |
-| GET | `/api/v1/payments/{id}` | Consulter un paiement par ID |
-| GET | `/api/v1/payments/wallet/{walletId}` | Historique des paiements d'un wallet |
+| GET | `/api/v1/payments/{id}` | Consulter un paiement par UUID |
+| GET | `/api/v1/payments/wallet/{walletId}` | Historique des paiements d'un wallet (UUID) |
 
 **Corps de la requete POST `/api/v1/payments`** :
 
 ```json
 {
-  "senderWalletId": "uuid-alice",
-  "receiverWalletId": "uuid-bob",
+  "senderWalletId": "550e8400-e29b-41d4-a716-446655440000",
+  "receiverWalletId": "550e8400-e29b-41d4-a716-446655440001",
   "amount": 1000,
   "currency": "XOF",
   "type": "P2P",
@@ -321,27 +358,38 @@ Types de paiement disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSI
 ## Communication Kafka entre services
 
 ```
-┌─────────────────┐   customer-events   ┌─────────────────┐
-│ Customer Service│ ──────────────────▶ │  Wallet Service │
-│  (port 8082)    │   customer.created  │  (port 8083)    │
-└─────────────────┘                     └────────┬────────┘
-                                                 │ wallet-events
-                                                 ▼
-                                       wallet.created / credited
-                                       wallet.debited / amount_frozen
-
-┌─────────────────┐   wallet-commands   ┌─────────────────┐
-│ Payment Service │ ──────────────────▶ │  Wallet Service │
-│  (port 8084)    │  DEBIT/CREDIT/      │  (port 8083)    │
-│                 │  COMPENSATE_DEBIT   │                 │
-│                 │ ◀─────────────────  │                 │
-└─────────────────┘  wallet-saga-events └─────────────────┘
-        │            DEBIT/CREDIT SUCCESS or FAILURE
-        │
-        │ payment-events
-        ▼
-payment.initiated / payment.completed / payment.failed
+ ┌──────────────────┐
+ │  Customer Service│  POST /api/v1/customers
+ │    (port 8082)   │  → IDs en UUID
+ └────────┬─────────┘
+          │ [customer-events]
+          │  customer.created {customerId: UUID, ...}
+          ▼
+ ┌──────────────────┐                        ┌──────────────────┐
+ │  Wallet Service  │◀──[wallet-commands]────│ Payment Service  │
+ │    (port 8083)   │   DEBIT_WALLET         │   (port 8084)    │
+ │                  │   CREDIT_WALLET        │                  │
+ │  Auto-cree le    │   COMPENSATE_DEBIT     │  Saga Pattern    │
+ │  wallet (UUID)   │                        │  Idempotency     │
+ │  a la reception  │──[wallet-saga-events]─▶│  (Redis, TTL 24h)│
+ │  de customer.    │   DEBIT_SUCCESS        │                  │
+ │  created         │   DEBIT_FAILED         │                  │
+ │                  │   CREDIT_SUCCESS       │                  │
+ └──────────────────┘   CREDIT_FAILED        └────────┬─────────┘
+                                                      │ [payment-events]
+                                                      │  payment.initiated
+                                                      │  payment.completed
+                                                      ▼  payment.failed
+                                             (Fraud MS · Notify MS · Settlement MS)
 ```
+
+**Regles de deserialisation Kafka cross-service** :
+- `spring.json.use.type.headers: false` — ignore les headers `__TypeId__` du producer
+- `spring.json.value.default.type: java.util.HashMap` — deserialise en Map generique cote consumer
+
+**Format des IDs dans les events Kafka** :
+- `customerId` : UUID string (ex. `"a3bb189e-8bf9-3888-9912-ace4e6543002"`)
+- `walletId` : UUID string
 
 ## Tests
 
