@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +30,9 @@ class UpdateCustomerUseCaseTest {
 
     private UpdateCustomerUseCase useCase;
 
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000099");
+
     @BeforeEach
     void setUp() {
         useCase = new UpdateCustomerUseCase(customerService);
@@ -39,16 +43,15 @@ class UpdateCustomerUseCaseTest {
         DomainCustomer existing = buildExistingCustomer();
         DomainCustomer updatedData = buildUpdatedData();
 
-        when(customerService.findById(1L)).thenReturn(Optional.of(existing));
+        when(customerService.findById(CUSTOMER_ID)).thenReturn(Optional.of(existing));
         when(customerService.save(any(DomainCustomer.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        DomainCustomer result = useCase.execute(1L, updatedData);
+        DomainCustomer result = useCase.execute(CUSTOMER_ID, updatedData);
 
         assertEquals("Kofi", result.getFirstName());
         assertEquals("Anan", result.getLastName());
         assertEquals("kofi@example.com", result.getEmail());
         assertNotNull(result.getUpdatedAt());
-        // Les champs metier ne changent pas
         assertEquals(AccountStatus.PENDING, result.getStatus());
         assertEquals(KycStatus.NOT_SUBMITTED, result.getKycStatus());
         assertEquals(TierLevel.BASIC, result.getTierLevel());
@@ -57,9 +60,9 @@ class UpdateCustomerUseCaseTest {
 
     @Test
     void execute_withNonExistingCustomer_shouldThrowNotFoundException() {
-        when(customerService.findById(99L)).thenReturn(Optional.empty());
+        when(customerService.findById(OTHER_ID)).thenReturn(Optional.empty());
 
-        assertThrows(CustomerNotFoundException.class, () -> useCase.execute(99L, buildUpdatedData()));
+        assertThrows(CustomerNotFoundException.class, () -> useCase.execute(OTHER_ID, buildUpdatedData()));
         verify(customerService, never()).save(any());
     }
 
@@ -69,15 +72,15 @@ class UpdateCustomerUseCaseTest {
         DomainCustomer updatedData = buildUpdatedData();
         updatedData.setEmail("invalid-email");
 
-        when(customerService.findById(1L)).thenReturn(Optional.of(existing));
+        when(customerService.findById(CUSTOMER_ID)).thenReturn(Optional.of(existing));
 
-        assertThrows(DomainValidationException.class, () -> useCase.execute(1L, updatedData));
+        assertThrows(DomainValidationException.class, () -> useCase.execute(CUSTOMER_ID, updatedData));
         verify(customerService, never()).save(any());
     }
 
     private DomainCustomer buildExistingCustomer() {
         DomainCustomer customer = new DomainCustomer();
-        customer.setId(1L);
+        customer.setId(CUSTOMER_ID);
         customer.setFirstName("Tanguy");
         customer.setLastName("Mambafei");
         customer.setEmail("tanguy@example.com");
