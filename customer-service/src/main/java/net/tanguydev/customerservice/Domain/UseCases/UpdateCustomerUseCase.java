@@ -6,6 +6,7 @@ import net.tanguydev.customerservice.Domain.Validations.DomainCustomerValidator;
 import net.tanguydev.customerservice.Domain.Validations.Exception.CustomerNotFoundException;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class UpdateCustomerUseCase implements UpdateCustomerUseCaseInterface {
     private final CustomerServiceInterface customerService;
@@ -16,7 +17,7 @@ public class UpdateCustomerUseCase implements UpdateCustomerUseCaseInterface {
     }
 
     @Override
-    public DomainCustomer execute(Long id, DomainCustomer updatedData) {
+    public DomainCustomer execute(UUID id, DomainCustomer updatedData) {
         DomainCustomer existing = customerService.findById(id)
                 .orElseThrow(() -> new CustomerNotFoundException(id));
 

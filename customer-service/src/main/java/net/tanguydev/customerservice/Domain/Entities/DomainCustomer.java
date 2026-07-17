@@ -7,9 +7,10 @@ import net.tanguydev.customerservice.Domain.Enums.TierLevel;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 public class DomainCustomer {
-    private Long id;
+    private UUID id;
     private String firstName;
     private String lastName;
     private String email;
@@ -37,7 +38,7 @@ public class DomainCustomer {
         super();
     }
 
-    public DomainCustomer(Long id, String firstName, String lastName, String email, String phoneNumber, String nationality, String addressLine1, String city, String country, AccountStatus status, KycStatus kycStatus, OffsetDateTime kycVerifiedAt, BigDecimal riskScore, TierLevel tierLevel, BigDecimal dailyLimit, String preferredCurrency, Boolean isEmailVerified, Boolean isPhoneVerified, String profilePictureUrl, Map<String, Object> metadata, OffsetDateTime createdAt, OffsetDateTime updatedAt, OffsetDateTime deletedAt) {
+    public DomainCustomer(UUID id, String firstName, String lastName, String email, String phoneNumber, String nationality, String addressLine1, String city, String country, AccountStatus status, KycStatus kycStatus, OffsetDateTime kycVerifiedAt, BigDecimal riskScore, TierLevel tierLevel, BigDecimal dailyLimit, String preferredCurrency, Boolean isEmailVerified, Boolean isPhoneVerified, String profilePictureUrl, Map<String, Object> metadata, OffsetDateTime createdAt, OffsetDateTime updatedAt, OffsetDateTime deletedAt) {
         this.id = id;
         this.firstName = firstName;
         this.lastName = lastName;
@@ -63,8 +64,8 @@ public class DomainCustomer {
         this.deletedAt = deletedAt;
     }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
 
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }

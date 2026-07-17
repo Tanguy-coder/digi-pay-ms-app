@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class CustomerRepository implements CustomerRepositoryInterface {
@@ -26,7 +27,7 @@ public class CustomerRepository implements CustomerRepositoryInterface {
     }
 
     @Override
-    public Optional<DomainCustomer> findById(Long id) {
+    public Optional<DomainCustomer> findById(UUID id) {
         return this.customerJpaRepository.findById(id).map(customerMapper::toDomain);
     }
 

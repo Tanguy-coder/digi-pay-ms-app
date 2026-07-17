@@ -3,10 +3,11 @@ package net.tanguydev.customerservice.Domain.Events;
 import net.tanguydev.customerservice.Domain.Enums.AccountStatus;
 import net.tanguydev.customerservice.Domain.Enums.KycStatus;
 import net.tanguydev.customerservice.Domain.Enums.TierLevel;
+import java.util.UUID;
 
 public class CustomerEvent {
     private String eventType;
-    private Long customerId;
+    private UUID customerId;
     private String firstName;
     private String lastName;
     private String email;
@@ -20,7 +21,7 @@ public class CustomerEvent {
 
     public CustomerEvent() {}
 
-    public CustomerEvent(String eventType, Long customerId, String firstName, String lastName,
+    public CustomerEvent(String eventType, UUID customerId, String firstName, String lastName,
                          String email, String phoneNumber, String nationality, String country,
                          AccountStatus status, KycStatus kycStatus, TierLevel tierLevel,
                          String preferredCurrency) {
@@ -41,8 +42,8 @@ public class CustomerEvent {
     public String getEventType() { return eventType; }
     public void setEventType(String eventType) { this.eventType = eventType; }
 
-    public Long getCustomerId() { return customerId; }
-    public void setCustomerId(Long customerId) { this.customerId = customerId; }
+    public UUID getCustomerId() { return customerId; }
+    public void setCustomerId(UUID customerId) { this.customerId = customerId; }
 
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }

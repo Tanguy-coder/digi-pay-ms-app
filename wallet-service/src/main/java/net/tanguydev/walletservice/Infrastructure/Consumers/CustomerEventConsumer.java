@@ -14,7 +14,6 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
-import java.util.Objects;
 
 @Component
 public class CustomerEventConsumer {
@@ -38,7 +37,7 @@ public class CustomerEventConsumer {
     }
 
     private void handleCustomerCreated(Map<String, Object> message) {
-        UUID customerId = toUUID(message.get("customerId"));
+        UUID customerId = UUID.fromString((String) message.get("customerId"));
         String currency = (String) message.get("preferredCurrency");
 
         if (walletService.findByCustomerId(customerId).isPresent()) {
@@ -54,12 +53,5 @@ public class CustomerEventConsumer {
         wallet.setStatus(WalletStatus.ACTIVE);
 
         createWalletUseCase.execute(wallet);
-    }
-
-    // customerId est un Long côté customer-service → convertit en UUID déterministe
-    private UUID toUUID(Object value) {
-        if (value instanceof String s) return UUID.fromString(s);
-        long id = ((Number) Objects.requireNonNull(value)).longValue();
-        return new UUID(0L, id);
     }
 }

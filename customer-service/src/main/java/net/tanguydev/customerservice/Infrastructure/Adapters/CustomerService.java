@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class CustomerService implements CustomerServiceInterface {
@@ -23,7 +24,7 @@ public class CustomerService implements CustomerServiceInterface {
     }
 
     @Override
-    public Optional<DomainCustomer> findById(Long id) {
+    public Optional<DomainCustomer> findById(UUID id) {
         return this.customerRepository.findById(id);
     }
 

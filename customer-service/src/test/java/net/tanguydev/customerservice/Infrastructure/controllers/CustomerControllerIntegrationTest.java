@@ -80,7 +80,7 @@ class CustomerControllerIntegrationTest {
 
     @Test
     void show_withNonExistingId_shouldReturn404() throws Exception {
-        mockMvc.perform(get("/api/v1/customers/999"))
+        mockMvc.perform(get("/api/v1/customers/00000000-0000-0000-0000-000000000999"))
                 .andExpect(status().isNotFound());
     }
 
@@ -103,7 +103,7 @@ class CustomerControllerIntegrationTest {
     void update_withNonExistingId_shouldReturn404() throws Exception {
         CustomerRequest request = buildValidRequest();
 
-        mockMvc.perform(put("/api/v1/customers/999")
+        mockMvc.perform(put("/api/v1/customers/00000000-0000-0000-0000-000000000999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());

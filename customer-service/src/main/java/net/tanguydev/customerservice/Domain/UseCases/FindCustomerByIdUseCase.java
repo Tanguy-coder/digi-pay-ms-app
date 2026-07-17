@@ -5,6 +5,7 @@ import net.tanguydev.customerservice.Domain.Ports.CustomerServiceInterface;
 import net.tanguydev.customerservice.Domain.Validations.DomainCustomerValidator;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public class FindCustomerByIdUseCase implements FindCutomerByIdUseCaseInterface{
     private final CustomerServiceInterface customerService;
@@ -15,7 +16,7 @@ public class FindCustomerByIdUseCase implements FindCutomerByIdUseCaseInterface{
     }
 
     @Override
-    public Optional<DomainCustomer> execute(Long id) {
+    public Optional<DomainCustomer> execute(UUID id) {
         //validator.validate(ne);
         return this.customerService.findById(id);
     }

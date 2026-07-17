@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +33,8 @@ class CreateCustomerUseCaseTest {
 
     private CreateCustomerUseCase useCase;
 
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @BeforeEach
     void setUp() {
         useCase = new CreateCustomerUseCase(customerService, eventPublisher);
@@ -40,7 +43,7 @@ class CreateCustomerUseCaseTest {
     @Test
     void execute_withValidCustomer_shouldSaveAndPublishEvent() {
         DomainCustomer customer = buildValidCustomer();
-        customer.setId(1L);
+        customer.setId(CUSTOMER_ID);
         when(customerService.save(any(DomainCustomer.class))).thenReturn(customer);
 
         DomainCustomer result = useCase.execute(customer);
@@ -54,7 +57,7 @@ class CreateCustomerUseCaseTest {
 
         CustomerEvent published = eventCaptor.getValue();
         assertEquals("customer.created", published.getEventType());
-        assertEquals(1L, published.getCustomerId());
+        assertEquals(CUSTOMER_ID, published.getCustomerId());
         assertEquals("Tanguy", published.getFirstName());
         assertEquals("XOF", published.getPreferredCurrency());
     }
@@ -95,7 +98,7 @@ class CreateCustomerUseCaseTest {
         customer.setRiskScore(null);
         customer.setIsEmailVerified(null);
         customer.setIsPhoneVerified(null);
-        customer.setId(1L);
+        customer.setId(CUSTOMER_ID);
 
         when(customerService.save(any(DomainCustomer.class))).thenAnswer(inv -> inv.getArgument(0));
 
