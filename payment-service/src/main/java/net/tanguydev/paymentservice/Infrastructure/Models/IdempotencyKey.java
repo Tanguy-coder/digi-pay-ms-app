@@ -11,7 +11,7 @@ import java.time.OffsetDateTime;
 public class IdempotencyKey {
 
     @Id
-    @Column(name = "key", length = 100, nullable = false)
+    @Column(name = "idempotency_key", length = 100, nullable = false)
     private String key;
 
     @Column(name = "response_status", nullable = false)

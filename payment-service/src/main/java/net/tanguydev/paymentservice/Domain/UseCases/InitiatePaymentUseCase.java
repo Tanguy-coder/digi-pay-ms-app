@@ -6,6 +6,7 @@ import net.tanguydev.paymentservice.Domain.Events.PaymentEvent;
 import net.tanguydev.paymentservice.Domain.Ports.IdempotencyStoreInterface;
 import net.tanguydev.paymentservice.Domain.Ports.PaymentEventPublisherInterface;
 import net.tanguydev.paymentservice.Domain.Ports.PaymentServiceInterface;
+import net.tanguydev.paymentservice.Domain.Entities.DomainIdempotencyKey;
 import net.tanguydev.paymentservice.Domain.Validations.DomainPaymentValidator;
 import net.tanguydev.paymentservice.Domain.Validations.Exception.DuplicatePaymentException;
 
@@ -45,6 +46,12 @@ public class InitiatePaymentUseCase implements InitiatePaymentUseCaseInterface {
         validator.validate(payment);
 
         DomainPayment saved = paymentService.save(payment);
+
+        DomainIdempotencyKey idempotencyEntry = new DomainIdempotencyKey();
+        idempotencyEntry.setKey(saved.getIdempotencyKey());
+        idempotencyEntry.setResponseStatus(201);
+        idempotencyEntry.setExpiresAt(OffsetDateTime.now().plusHours(24));
+        idempotencyStore.store(idempotencyEntry);
 
         // Publie l'event "payment.initiated" sur payment-events
         PaymentEvent event = new PaymentEvent();
