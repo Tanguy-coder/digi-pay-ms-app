@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/customers")
@@ -47,7 +48,7 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<CustomerResponse> show(@PathVariable Long id) {
+    public ResponseEntity<CustomerResponse> show(@PathVariable UUID id) {
         return find.execute(id)
                 .map(presenter::present)
                 .map(ResponseEntity::ok)
@@ -62,7 +63,7 @@ public class CustomerController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<CustomerResponse> update(@PathVariable Long id, @Valid @RequestBody CustomerRequest request) {
+    public ResponseEntity<CustomerResponse> update(@PathVariable UUID id, @Valid @RequestBody CustomerRequest request) {
         DomainCustomer domainCustomer = mapper.requestToDomain(request);
         DomainCustomer updated = update.execute(id, domainCustomer);
         return ResponseEntity.ok(presenter.present(updated));
