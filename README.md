@@ -20,7 +20,8 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 
 - Creation et gestion de comptes clients avec processus KYC
 - Portefeuilles electroniques avec gestion des soldes et gel de fonds
-- Paiements marchands et transferts peer-to-peer
+- Paiements marchands et transferts peer-to-peer avec Saga distribue
+- Idempotency garantie sur les paiements via Redis
 - Reglement interbancaire avec calcul de position nette
 - Detection de fraude en temps reel (regles configurables)
 - Notifications multi-canal (Email, SMS, Push)
@@ -30,13 +31,11 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 ```
                         [ API Gateway ]
                               |
-              [ Customer MS ]    [ Wallet MS ]
-                    |                  |
-        ════════════[ KAFKA CLUSTER ]════════════
-              |              |              |
-        [ Payment MS ] [ Fraud MS ] [ Notify MS ]
-              |
-        [ Settlement MS ]
+       [ Customer MS ] [ Wallet MS ] [ Payment MS ]
+             |               |              |
+     ════════════════[ KAFKA CLUSTER ]═══════════════
+             |               |              |
+       [ Fraud MS ]   [ Notify MS ]  [ Settlement MS ]
 ```
 
 **Principes** : Loose Coupling (communication par evenements) · Database per Service (PostgreSQL par MS + Redis partage) · API Gateway unique · High Cohesion.
@@ -46,8 +45,8 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | Microservice | Responsabilites | Publie (Events) | Consomme (Events) |
 |---|---|---|---|
 | **Customer MS** | Creation client · KYC · Infos personnelles | `customer.created` `customer.updated` `customer.verified` | — |
-| **Wallet MS** | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` `wallet.amount_frozen` | `customer.created` |
-| **Payment MS** | Paiements marchands · Transferts P2P | `payment.initiated` `payment.completed` `payment.failed` | `wallet.debited` `wallet.credited` |
+| **Wallet MS** | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` `wallet.amount_frozen` | `customer.created` · commandes Saga |
+| **Payment MS** | Paiements P2P/marchands · Saga orchestration · Idempotency | `payment.initiated` `payment.completed` `payment.failed` | reponses Saga wallet |
 | **Fraud Detection MS** | Regles anti-fraude · Score de risque · Alertes | `fraud.detected` `fraud.cleared` | `payment.initiated` |
 | **Notification MS** | Email · SMS · Push | — | `payment.completed` `payment.failed` `wallet.credited` |
 | **Settlement MS** | Compensation interbancaire · Position nette | `settlement.completed` `settlement.failed` | `payment.completed` |
@@ -57,7 +56,8 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | Topic | Partitions | Consumer Group(s) | Usage |
 |---|---|---|---|
 | `customer-events` | 3 | wallet-group | Cycle de vie client, KYC |
-| `wallet-events` | 3 | payment-group | Operations sur portefeuille |
+| `wallet-commands` | 3 | wallet-group | Commandes Saga vers wallet (DEBIT, CREDIT, COMPENSATE_DEBIT) |
+| `wallet-saga-events` | 3 | payment-group | Reponses Saga du wallet (SUCCESS, FAILURE) |
 | `payment-events` | 3 | fraud-group · notification-group · settlement-group | Flux de paiement central |
 | `fraud-events` | 2 | payment-group · notification-group | Alertes fraude temps reel |
 | `settlement-events` | 2 | reporting-group | Compensation & reglement |
@@ -67,25 +67,41 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 
 | Pattern | Application dans ce projet |
 |---|---|
+| **Saga (Choreography)** | Payment MS orchestrate DEBIT→CREDIT→COMPLETE; compensation automatique si CREDIT echoue |
+| **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
 | **Event Sourcing** | Wallet : +1000 / +2000 / -500 → solde calcule a la volee depuis wallet-events |
 | **CQRS** | Command: initier paiement · Query: historique transactions via read model dedie |
-| **Saga Pattern** | Transfert A→B : si `wallet.debited` OK mais `wallet.credited` KO → rollback via compensation event |
 | **DDD** | Customer / Wallet / Payment / Fraud / Settlement = bounded contexts independants |
 | **Clean Architecture** | Entites domaine pures sans dependance framework, use cases isoles |
-| **Idempotency** | Idempotency keys Redis pour les paiements et transferts |
+| **Outbox Pattern** | `DomainOutboxEvent` garantit coherence entre sauvegarde DB et publication Kafka |
 | **Circuit Breaker** | Resilience4j : open/closed/half-open par service |
 
-### Saga Pattern — Flux de transfert
+### Saga Pattern — Flux de transfert P2P
 
 ```
-Transfert 500$ de A vers B :
+Transfert 1000 XOF de Alice (wallet A) vers Bob (wallet B) :
 
-1. Payment MS publie payment.initiated
-2. Wallet MS consomme → publie wallet.debited (debit A) ou wallet.debit.failed
-3. (succes) Wallet MS publie wallet.credited (credit B)
-   (echec) Wallet MS publie wallet.credit.failed → wallet.compensated (remboursement A)
-4. Payment MS publie payment.completed ou payment.failed
-5. Notification MS informe l'utilisateur du resultat
+Payment MS
+  1. Verifie idempotency key (Redis) → 409 si doublon
+  2. Sauvegarde paiement (INITIATED) → stocke cle idempotency
+  3. Publie payment.initiated sur payment-events
+  4. Envoie commande DEBIT_WALLET sur wallet-commands
+
+Wallet MS
+  5a. Debit Alice reussi → publie DEBIT_SUCCESS sur wallet-saga-events
+  5b. Debit Alice echoue (solde insuffisant) → publie DEBIT_FAILED
+
+Payment MS
+  6a. (succes) Envoie commande CREDIT_WALLET sur wallet-commands
+  6b. (echec) → paiement FAILED, fin
+
+Wallet MS
+  7a. Credit Bob reussi → publie CREDIT_SUCCESS sur wallet-saga-events
+  7b. Credit Bob echoue → publie CREDIT_FAILED
+
+Payment MS
+  8a. (succes) → paiement COMPLETED, publie payment.completed
+  8b. (echec) Envoie COMPENSATE_DEBIT → re-credit Alice → paiement REVERSED
 ```
 
 ## Regles de detection de fraude
@@ -107,8 +123,8 @@ Transfert 500$ de A vers B :
 | Service Discovery | Eureka (Spring Cloud) |
 | API Gateway | Spring Cloud Gateway |
 | Configuration | Spring Cloud Config |
-| Base de donnees | PostgreSQL (par service) · H2 (dev) |
-| Cache | Redis (sessions, idempotency, rate limiting) |
+| Base de donnees | PostgreSQL (par service) · H2 (dev/test) |
+| Cache / Idempotency | Redis 7 |
 | Observabilite | Prometheus + Grafana |
 | Tracing distribue | Zipkin / Micrometer |
 | Documentation API | SpringDoc OpenAPI / Swagger UI |
@@ -152,7 +168,8 @@ service/
 digi-pay-ms-app/
 ├── customer-service/         → Customer MS (port 8082)
 ├── wallet-service/           → Wallet MS (port 8083)
-├── docker-compose.yaml       → Kafka + services
+├── payment-service/          → Payment MS (port 8084)
+├── docker-compose.yaml       → Kafka + Redis + services
 └── README.md
 ```
 
@@ -162,63 +179,88 @@ digi-pay-ms-app/
 
 - Java 21+
 - Maven 3.9+
-- Docker (pour Kafka)
+- Docker
 
-### 1. Demarrer Kafka
+### 1. Demarrer l'infrastructure (Kafka + Redis)
 
 ```bash
-docker compose up kafka -d
+docker compose up kafka redis -d
 ```
 
-### 2. Lancer le Customer Service
+### 2. Lancer les services
 
 ```bash
-cd customer-service
-mvn spring-boot:run
+# Terminal 1
+cd customer-service && mvn spring-boot:run
+
+# Terminal 2
+cd wallet-service && mvn spring-boot:run
+
+# Terminal 3
+cd payment-service && mvn spring-boot:run
 ```
 
-L'application demarre sur le port **8082** avec une base H2 en memoire.
-
-### 3. Lancer le Wallet Service
+Ou tout demarrer via Docker Compose :
 
 ```bash
-cd wallet-service
-mvn spring-boot:run
+docker compose up --build -d
 ```
 
-L'application demarre sur le port **8083** avec une base H2 en memoire.
-Le consumer Kafka ecoute automatiquement le topic `customer-events`.
-
-### 4. Tester le flux complet
+### 3. Tester le flux complet E2E
 
 ```bash
-# Creer un client (publie customer.created sur Kafka → wallet auto-cree)
-curl -X POST http://localhost:8082/api/v1/customers \
+# 1. Creer Alice (publie customer.created → wallet auto-cree)
+curl -s -X POST http://localhost:8082/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
-    "firstName": "Tanguy",
-    "lastName": "Mambafei",
-    "email": "tanguy@example.com",
-    "phoneNumber": "+22890000000",
-    "nationality": "TGO",
-    "addressLine1": "123 Rue de Lome",
-    "city": "Lome",
-    "country": "Togo",
-    "preferredCurrency": "XOF"
-  }'
+    "firstName": "Alice", "lastName": "Dupont",
+    "email": "alice@example.com", "phoneNumber": "+22890000001",
+    "nationality": "TGO", "addressLine1": "1 Rue de Lome",
+    "city": "Lome", "country": "Togo", "preferredCurrency": "XOF"
+  }' | jq .
 
-# Verifier le wallet auto-cree (attendre 2-3s pour la propagation Kafka)
-curl http://localhost:8083/api/v1/wallets/customer/1
+# 2. Creer Bob
+curl -s -X POST http://localhost:8082/api/v1/customers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Bob", "lastName": "Martin",
+    "email": "bob@example.com", "phoneNumber": "+22890000002",
+    "nationality": "TGO", "addressLine1": "2 Rue de Lome",
+    "city": "Lome", "country": "Togo", "preferredCurrency": "XOF"
+  }' | jq .
 
-# Crediter le wallet
-curl -X POST "http://localhost:8083/api/v1/wallets/1/credit?amount=50000"
+# 3. Recuperer les IDs wallet (attendre 2-3s propagation Kafka)
+ALICE_WALLET=$(curl -s http://localhost:8083/api/v1/wallets/customer/<ALICE_ID> | jq -r '.id')
+BOB_WALLET=$(curl -s http://localhost:8083/api/v1/wallets/customer/<BOB_ID> | jq -r '.id')
 
-# Debiter le wallet
-curl -X POST "http://localhost:8083/api/v1/wallets/1/debit?amount=15000"
+# 4. Crediter Alice
+curl -s -X POST "http://localhost:8083/api/v1/wallets/$ALICE_WALLET/credit?amount=3000"
 
-# Geler un montant
-curl -X POST "http://localhost:8083/api/v1/wallets/1/freeze?amount=10000"
+# 5. Transfert P2P Alice → Bob (Saga)
+curl -s -X POST http://localhost:8084/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"senderWalletId\": \"$ALICE_WALLET\",
+    \"receiverWalletId\": \"$BOB_WALLET\",
+    \"amount\": 1000,
+    \"currency\": \"XOF\",
+    \"type\": \"P2P\",
+    \"idempotencyKey\": \"pay-001\"
+  }" | jq .
+
+# 6. Verifier balances (Alice: 2000, Bob: 1000)
+curl -s http://localhost:8083/api/v1/wallets/$ALICE_WALLET | jq '.balance'
+curl -s http://localhost:8083/api/v1/wallets/$BOB_WALLET | jq '.balance'
 ```
+
+### Scenarios de test valides
+
+| Scenario | Attendu |
+|---|---|
+| Transfert normal | status `COMPLETED`, balances mises a jour |
+| Meme `idempotencyKey` rejoue | HTTP `409 Conflict` |
+| Solde insuffisant | status `FAILED`, `failureReason` detaille, balance inchangee |
+| CREDIT echoue apres DEBIT | status `REVERSED`, Alice re-creditee via compensation |
 
 ### URLs utiles
 
@@ -226,8 +268,10 @@ curl -X POST "http://localhost:8083/api/v1/wallets/1/freeze?amount=10000"
 |---|---|
 | Customer API | http://localhost:8082/api/v1/customers |
 | Wallet API | http://localhost:8083/api/v1/wallets |
+| Payment API | http://localhost:8084/api/v1/payments |
 | Customer H2 Console | http://localhost:8082/h2-console |
 | Wallet H2 Console | http://localhost:8083/h2-console |
+| Payment H2 Console | http://localhost:8084/h2-console |
 
 ## Endpoints API
 
@@ -237,7 +281,7 @@ curl -X POST "http://localhost:8083/api/v1/wallets/1/freeze?amount=10000"
 |---|---|---|
 | POST | `/api/v1/customers` | Creer un client (publie `customer.created`) |
 | GET | `/api/v1/customers` | Lister les clients |
-| GET | `/api/v1/customers/{id}` | Trouver un client par ID |
+| GET | `/api/v1/customers/{id}` | Trouver un client par ID (UUID) |
 | PUT | `/api/v1/customers/{id}` | Mettre a jour un client |
 
 ### Wallet Service (port 8083)
@@ -251,40 +295,75 @@ curl -X POST "http://localhost:8083/api/v1/wallets/1/freeze?amount=10000"
 | POST | `/api/v1/wallets/{id}/debit?amount=X` | Debiter (publie `wallet.debited`) |
 | POST | `/api/v1/wallets/{id}/freeze?amount=X` | Geler (publie `wallet.amount_frozen`) |
 
+### Payment Service (port 8084)
+
+| Methode | URL | Description |
+|---|---|---|
+| POST | `/api/v1/payments` | Initier un paiement (Saga + idempotency) |
+| GET | `/api/v1/payments/{id}` | Consulter un paiement par ID |
+| GET | `/api/v1/payments/wallet/{walletId}` | Historique des paiements d'un wallet |
+
+**Corps de la requete POST `/api/v1/payments`** :
+
+```json
+{
+  "senderWalletId": "uuid-alice",
+  "receiverWalletId": "uuid-bob",
+  "amount": 1000,
+  "currency": "XOF",
+  "type": "P2P",
+  "idempotencyKey": "pay-unique-ref-001"
+}
+```
+
+Types de paiement disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
+
 ## Communication Kafka entre services
 
 ```
-┌──────────────────┐         customer-events         ┌──────────────────┐
-│  Customer Service │ ─────────────────────────────▶ │  Wallet Service   │
-│  (port 8082)      │    customer.created            │  (port 8083)      │
-└──────────────────┘                                 └──────────────────┘
-                                                              │
-                                                              │ wallet-events
-                                                              ▼
-                                                     wallet.created
-                                                     wallet.credited
-                                                     wallet.debited
-                                                     wallet.amount_frozen
-```
+┌─────────────────┐   customer-events   ┌─────────────────┐
+│ Customer Service│ ──────────────────▶ │  Wallet Service │
+│  (port 8082)    │   customer.created  │  (port 8083)    │
+└─────────────────┘                     └────────┬────────┘
+                                                 │ wallet-events
+                                                 ▼
+                                       wallet.created / credited
+                                       wallet.debited / amount_frozen
 
-**Flux** :
-1. Un client est cree via POST `/api/v1/customers`
-2. Le `CreateCustomerUseCase` publie `customer.created` sur Kafka
-3. Le `CustomerEventConsumer` du wallet-service recoit l'event
-4. Un wallet est automatiquement cree (idempotent) avec la devise preferee du client
-5. L'event `wallet.created` est publie sur `wallet-events`
+┌─────────────────┐   wallet-commands   ┌─────────────────┐
+│ Payment Service │ ──────────────────▶ │  Wallet Service │
+│  (port 8084)    │  DEBIT/CREDIT/      │  (port 8083)    │
+│                 │  COMPENSATE_DEBIT   │                 │
+│                 │ ◀─────────────────  │                 │
+└─────────────────┘  wallet-saga-events └─────────────────┘
+        │            DEBIT/CREDIT SUCCESS or FAILURE
+        │
+        │ payment-events
+        ▼
+payment.initiated / payment.completed / payment.failed
+```
 
 ## Tests
 
 ```bash
-# Tests unitaires + integration du wallet-service (21 tests)
+# customer-service : 8 tests
+cd customer-service
+mvn test -Dtest="CreateCustomerUseCaseTest,FindCustomerByIdUseCaseTest,UpdateCustomerUseCaseTest,CustomerControllerIntegrationTest"
+
+# wallet-service : 21 tests
 cd wallet-service
 mvn test
 
-# Tests unitaires du customer-service (5 tests)
-cd customer-service
-mvn test -Dtest="CreateCustomerUseCaseTest"
+# payment-service : 21 tests
+cd payment-service
+mvn test
 ```
+
+| Service | Tests | Couverture |
+|---|---|---|
+| customer-service | 8 | Use cases (create, find, update) + Integration controller |
+| wallet-service | 21 | Use cases (4) + Controller (7) + Integration |
+| payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
 
 ## Roadmap
 
@@ -292,7 +371,7 @@ mvn test -Dtest="CreateCustomerUseCaseTest"
 |---|---|---|
 | Phase 1 | Infrastructure Docker + Kafka | Termine |
 | Phase 2 | Customer MS + Wallet MS + Kafka events + Tests | Termine |
-| Phase 3 | Payment MS + Saga Pattern + Idempotency + Redis | A venir |
+| Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + Tests E2E | Termine |
 | Phase 4 | Fraud Detection MS + Settlement MS | A venir |
 | Phase 5 | Notification MS + Prometheus + Zipkin | A venir |
 | Phase 6 | Tests de charge · CI/CD · Documentation | A venir |
@@ -300,7 +379,7 @@ mvn test -Dtest="CreateCustomerUseCaseTest"
 ## Approfondissements prevus (Senior+)
 
 - Exactly-Once Semantics Kafka (`isolation.level = read_committed`)
-- Outbox Pattern (coherence DB write + Kafka publish sans 2PC)
+- Outbox Pattern avec Debezium (CDC pour garantie transactionnelle DB → Kafka)
 - GDPR Compliance (chiffrement PII, droit a l'oubli dans les topics)
 - Multi-tenancy (isolation par institution bancaire)
 - gRPC entre services (queries synchrones haute-performance)
