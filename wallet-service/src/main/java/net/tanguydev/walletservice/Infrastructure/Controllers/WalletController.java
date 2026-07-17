@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/wallets")
@@ -52,7 +52,7 @@ public class WalletController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<WalletResponse> show(@PathVariable Long id) {
+    public ResponseEntity<WalletResponse> show(@PathVariable UUID id) {
         return findById.execute(id)
                 .map(presenter::present)
                 .map(ResponseEntity::ok)
@@ -60,7 +60,7 @@ public class WalletController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<WalletResponse> showByCustomer(@PathVariable Long customerId) {
+    public ResponseEntity<WalletResponse> showByCustomer(@PathVariable UUID customerId) {
         return findByCustomerId.execute(customerId)
                 .map(presenter::present)
                 .map(ResponseEntity::ok)
@@ -68,19 +68,19 @@ public class WalletController {
     }
 
     @PostMapping("/{id}/credit")
-    public ResponseEntity<WalletResponse> credit(@PathVariable Long id, @RequestParam BigDecimal amount) {
+    public ResponseEntity<WalletResponse> credit(@PathVariable UUID id, @RequestParam BigDecimal amount) {
         DomainWallet credited = credit.execute(id, amount);
         return ResponseEntity.ok(presenter.present(credited));
     }
 
     @PostMapping("/{id}/debit")
-    public ResponseEntity<WalletResponse> debit(@PathVariable Long id, @RequestParam BigDecimal amount) {
+    public ResponseEntity<WalletResponse> debit(@PathVariable UUID id, @RequestParam BigDecimal amount) {
         DomainWallet debited = debit.execute(id, amount);
         return ResponseEntity.ok(presenter.present(debited));
     }
 
     @PostMapping("/{id}/freeze")
-    public ResponseEntity<WalletResponse> freeze(@PathVariable Long id, @RequestParam BigDecimal amount) {
+    public ResponseEntity<WalletResponse> freeze(@PathVariable UUID id, @RequestParam BigDecimal amount) {
         DomainWallet frozen = freeze.execute(id, amount);
         return ResponseEntity.ok(presenter.present(frozen));
     }

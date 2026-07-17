@@ -21,14 +21,16 @@ public interface WalletMapper {
     List<DomainWallet> toDomainList(List<Wallet> wallets);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "walletNumber", ignore = true)
     @Mapping(target = "balance", ignore = true)
     @Mapping(target = "frozenAmount", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "version", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     DomainWallet requestToDomain(WalletRequest request);
 
-    @Mapping(target = "availableBalance", expression = "java(wallet.getBalance().subtract(wallet.getFrozenAmount()))")
+    @Mapping(target = "availableBalance", expression = "java(wallet.getAvailableBalance())")
     WalletResponse toResponse(DomainWallet wallet);
 
     List<WalletResponse> toResponseList(List<DomainWallet> wallets);

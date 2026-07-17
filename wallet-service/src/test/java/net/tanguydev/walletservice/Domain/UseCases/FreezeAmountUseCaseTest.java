@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +34,10 @@ class FreezeAmountUseCaseTest {
 
     private FreezeAmountUseCase useCase;
 
+    private static final UUID WALLET_ID  = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
+
     @BeforeEach
     void setUp() {
         useCase = new FreezeAmountUseCase(walletService, eventPublisher);
@@ -41,10 +46,10 @@ class FreezeAmountUseCaseTest {
     @Test
     void execute_shouldFreezeAndPublishEvent() {
         DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
         when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        DomainWallet result = useCase.execute(1L, new BigDecimal("4000"));
+        DomainWallet result = useCase.execute(WALLET_ID, new BigDecimal("4000"));
 
         assertEquals(new BigDecimal("4000"), result.getFrozenAmount());
         assertEquals(new BigDecimal("10000"), result.getBalance());
@@ -62,18 +67,18 @@ class FreezeAmountUseCaseTest {
     void execute_shouldThrow_whenInsufficientAvailableBalance() {
         DomainWallet wallet = buildActiveWallet();
         wallet.setFrozenAmount(new BigDecimal("8000"));
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
         assertThrows(InsufficientBalanceException.class,
-                () -> useCase.execute(1L, new BigDecimal("5000")));
+                () -> useCase.execute(WALLET_ID, new BigDecimal("5000")));
         verify(eventPublisher, never()).publish(any());
     }
 
     @Test
     void execute_shouldThrow_whenWalletNotFound() {
-        when(walletService.findById(99L)).thenReturn(Optional.empty());
+        when(walletService.findById(OTHER_ID)).thenReturn(Optional.empty());
 
-        assertThrows(WalletNotFoundException.class, () -> useCase.execute(99L, BigDecimal.TEN));
+        assertThrows(WalletNotFoundException.class, () -> useCase.execute(OTHER_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -81,16 +86,16 @@ class FreezeAmountUseCaseTest {
     void execute_shouldThrow_whenWalletNotActive() {
         DomainWallet wallet = buildActiveWallet();
         wallet.setStatus(WalletStatus.FROZEN);
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
-        assertThrows(WalletNotActiveException.class, () -> useCase.execute(1L, BigDecimal.TEN));
+        assertThrows(WalletNotActiveException.class, () -> useCase.execute(WALLET_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
     private DomainWallet buildActiveWallet() {
         DomainWallet w = new DomainWallet();
-        w.setId(1L);
-        w.setCustomerId(100L);
+        w.setId(WALLET_ID);
+        w.setCustomerId(CUSTOMER_ID);
         w.setCurrency("XOF");
         w.setBalance(new BigDecimal("10000"));
         w.setFrozenAmount(BigDecimal.ZERO);

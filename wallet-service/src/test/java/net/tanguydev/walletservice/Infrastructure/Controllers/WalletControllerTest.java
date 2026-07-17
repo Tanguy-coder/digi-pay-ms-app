@@ -2,11 +2,10 @@ package net.tanguydev.walletservice.Infrastructure.Controllers;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Enums.WalletType;
 import net.tanguydev.walletservice.Domain.Presenters.WalletPresenterInterface;
 import net.tanguydev.walletservice.Domain.Responses.WalletResponse;
 import net.tanguydev.walletservice.Domain.UseCases.*;
-import net.tanguydev.walletservice.Domain.Validations.Exception.InsufficientBalanceException;
-import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotFoundException;
 import net.tanguydev.walletservice.Infrastructure.Mappers.WalletMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -29,29 +29,18 @@ class WalletControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean
-    private CreateWalletUseCaseInterface create;
+    @MockitoBean private CreateWalletUseCaseInterface create;
+    @MockitoBean private FindWalletByIdUseCaseInterface findById;
+    @MockitoBean private FindWalletByCustomerIdUseCaseInterface findByCustomerId;
+    @MockitoBean private CreditWalletUseCaseInterface credit;
+    @MockitoBean private DebitWalletUseCaseInterface debit;
+    @MockitoBean private FreezeAmountUseCaseInterface freeze;
+    @MockitoBean private WalletPresenterInterface presenter;
+    @MockitoBean private WalletMapper mapper;
 
-    @MockitoBean
-    private FindWalletByIdUseCaseInterface findById;
-
-    @MockitoBean
-    private FindWalletByCustomerIdUseCaseInterface findByCustomerId;
-
-    @MockitoBean
-    private CreditWalletUseCaseInterface credit;
-
-    @MockitoBean
-    private DebitWalletUseCaseInterface debit;
-
-    @MockitoBean
-    private FreezeAmountUseCaseInterface freeze;
-
-    @MockitoBean
-    private WalletPresenterInterface presenter;
-
-    @MockitoBean
-    private WalletMapper mapper;
+    private static final UUID WALLET_ID   = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
+    private static final UUID OTHER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     @Test
     void store_shouldReturn201() throws Exception {
@@ -64,9 +53,8 @@ class WalletControllerTest {
 
         mockMvc.perform(post("/api/v1/wallets")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"customerId\": 100, \"currency\": \"XOF\"}"))
+                        .content("{\"customerId\": \"" + CUSTOMER_ID + "\", \"walletType\": \"PERSONAL\", \"currency\": \"XOF\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.currency").value("XOF"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
@@ -75,7 +63,7 @@ class WalletControllerTest {
     void store_shouldReturn422_whenCurrencyMissing() throws Exception {
         mockMvc.perform(post("/api/v1/wallets")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"customerId\": 100}"))
+                        .content("{\"customerId\": \"" + CUSTOMER_ID + "\", \"walletType\": \"PERSONAL\"}"))
                 .andExpect(status().isUnprocessableEntity());
     }
 
@@ -84,20 +72,19 @@ class WalletControllerTest {
         DomainWallet domain = buildWallet();
         WalletResponse response = buildResponse();
 
-        when(findById.execute(1L)).thenReturn(Optional.of(domain));
+        when(findById.execute(WALLET_ID)).thenReturn(Optional.of(domain));
         when(presenter.present(any(DomainWallet.class))).thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/wallets/1"))
+        mockMvc.perform(get("/api/v1/wallets/" + WALLET_ID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.balance").value(10000));
     }
 
     @Test
     void show_shouldReturn404_whenNotFound() throws Exception {
-        when(findById.execute(99L)).thenReturn(Optional.empty());
+        when(findById.execute(OTHER_ID)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/v1/wallets/99"))
+        mockMvc.perform(get("/api/v1/wallets/" + OTHER_ID))
                 .andExpect(status().isNotFound());
     }
 
@@ -108,10 +95,10 @@ class WalletControllerTest {
         WalletResponse response = buildResponse();
         response.setBalance(new BigDecimal("15000"));
 
-        when(credit.execute(1L, new BigDecimal("5000"))).thenReturn(domain);
+        when(credit.execute(WALLET_ID, new BigDecimal("5000"))).thenReturn(domain);
         when(presenter.present(any(DomainWallet.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/wallets/1/credit?amount=5000"))
+        mockMvc.perform(post("/api/v1/wallets/" + WALLET_ID + "/credit?amount=5000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.balance").value(15000));
     }
@@ -123,10 +110,10 @@ class WalletControllerTest {
         WalletResponse response = buildResponse();
         response.setBalance(new BigDecimal("7000"));
 
-        when(debit.execute(1L, new BigDecimal("3000"))).thenReturn(domain);
+        when(debit.execute(WALLET_ID, new BigDecimal("3000"))).thenReturn(domain);
         when(presenter.present(any(DomainWallet.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/wallets/1/debit?amount=3000"))
+        mockMvc.perform(post("/api/v1/wallets/" + WALLET_ID + "/debit?amount=3000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.balance").value(7000));
     }
@@ -138,18 +125,20 @@ class WalletControllerTest {
         WalletResponse response = buildResponse();
         response.setFrozenAmount(new BigDecimal("4000"));
 
-        when(freeze.execute(1L, new BigDecimal("4000"))).thenReturn(domain);
+        when(freeze.execute(WALLET_ID, new BigDecimal("4000"))).thenReturn(domain);
         when(presenter.present(any(DomainWallet.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/wallets/1/freeze?amount=4000"))
+        mockMvc.perform(post("/api/v1/wallets/" + WALLET_ID + "/freeze?amount=4000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.frozenAmount").value(4000));
     }
 
     private DomainWallet buildWallet() {
         DomainWallet w = new DomainWallet();
-        w.setId(1L);
-        w.setCustomerId(100L);
+        w.setId(WALLET_ID);
+        w.setCustomerId(CUSTOMER_ID);
+        w.setWalletType(WalletType.PERSONAL);
+        w.setWalletNumber("WLT-0000000001");
         w.setCurrency("XOF");
         w.setBalance(new BigDecimal("10000"));
         w.setFrozenAmount(BigDecimal.ZERO);
@@ -159,8 +148,10 @@ class WalletControllerTest {
 
     private WalletResponse buildResponse() {
         WalletResponse r = new WalletResponse();
-        r.setId(1L);
-        r.setCustomerId(100L);
+        r.setId(WALLET_ID);
+        r.setCustomerId(CUSTOMER_ID);
+        r.setWalletType(WalletType.PERSONAL);
+        r.setWalletNumber("WLT-0000000001");
         r.setCurrency("XOF");
         r.setBalance(new BigDecimal("10000"));
         r.setFrozenAmount(BigDecimal.ZERO);

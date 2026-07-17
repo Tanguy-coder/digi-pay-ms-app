@@ -1,108 +1,70 @@
 package net.tanguydev.walletservice.Domain.Responses;
 
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Enums.WalletType;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class WalletResponse {
 
-    private Long id;
-    private Long customerId;
+    private UUID id;
+    private UUID customerId;
+    private String walletNumber;
+    private WalletType walletType;
     private String currency;
     private BigDecimal balance;
     private BigDecimal frozenAmount;
     private BigDecimal availableBalance;
+    private BigDecimal dailyLimit;
+    private BigDecimal monthlyLimit;
     private WalletStatus status;
+    private Long version;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
-    public WalletResponse() {
-    }
+    public WalletResponse() {}
 
-    public WalletResponse(Long id, Long customerId, String currency, BigDecimal balance,
-                          BigDecimal frozenAmount, BigDecimal availableBalance, WalletStatus status,
-                          OffsetDateTime createdAt, OffsetDateTime updatedAt) {
-        this.id = id;
-        this.customerId = customerId;
-        this.currency = currency;
-        this.balance = balance;
-        this.frozenAmount = frozenAmount;
-        this.availableBalance = availableBalance;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-    }
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
 
-    public Long getId() {
-        return id;
-    }
+    public UUID getCustomerId() { return customerId; }
+    public void setCustomerId(UUID customerId) { this.customerId = customerId; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getWalletNumber() { return walletNumber; }
+    public void setWalletNumber(String walletNumber) { this.walletNumber = walletNumber; }
 
-    public Long getCustomerId() {
-        return customerId;
-    }
+    public WalletType getWalletType() { return walletType; }
+    public void setWalletType(WalletType walletType) { this.walletType = walletType; }
 
-    public void setCustomerId(Long customerId) {
-        this.customerId = customerId;
-    }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
 
-    public String getCurrency() {
-        return currency;
-    }
+    public BigDecimal getBalance() { return balance; }
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
 
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
+    public BigDecimal getFrozenAmount() { return frozenAmount; }
+    public void setFrozenAmount(BigDecimal frozenAmount) { this.frozenAmount = frozenAmount; }
 
-    public BigDecimal getBalance() {
-        return balance;
-    }
+    public BigDecimal getAvailableBalance() { return availableBalance; }
+    public void setAvailableBalance(BigDecimal availableBalance) { this.availableBalance = availableBalance; }
 
-    public void setBalance(BigDecimal balance) {
-        this.balance = balance;
-    }
+    public BigDecimal getDailyLimit() { return dailyLimit; }
+    public void setDailyLimit(BigDecimal dailyLimit) { this.dailyLimit = dailyLimit; }
 
-    public BigDecimal getFrozenAmount() {
-        return frozenAmount;
-    }
+    public BigDecimal getMonthlyLimit() { return monthlyLimit; }
+    public void setMonthlyLimit(BigDecimal monthlyLimit) { this.monthlyLimit = monthlyLimit; }
 
-    public void setFrozenAmount(BigDecimal frozenAmount) {
-        this.frozenAmount = frozenAmount;
-    }
+    public WalletStatus getStatus() { return status; }
+    public void setStatus(WalletStatus status) { this.status = status; }
 
-    public BigDecimal getAvailableBalance() {
-        return availableBalance;
-    }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
-    public void setAvailableBalance(BigDecimal availableBalance) {
-        this.availableBalance = availableBalance;
-    }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 
-    public WalletStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(WalletStatus status) {
-        this.status = status;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(OffsetDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(OffsetDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

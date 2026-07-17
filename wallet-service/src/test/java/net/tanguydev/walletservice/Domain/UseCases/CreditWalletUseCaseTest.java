@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +33,10 @@ class CreditWalletUseCaseTest {
 
     private CreditWalletUseCase useCase;
 
+    private static final UUID WALLET_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
+
     @BeforeEach
     void setUp() {
         useCase = new CreditWalletUseCase(walletService, eventPublisher);
@@ -40,10 +45,10 @@ class CreditWalletUseCaseTest {
     @Test
     void execute_shouldCreditAndPublishEvent() {
         DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
         when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        DomainWallet result = useCase.execute(1L, new BigDecimal("5000"));
+        DomainWallet result = useCase.execute(WALLET_ID, new BigDecimal("5000"));
 
         assertEquals(new BigDecimal("15000"), result.getBalance());
 
@@ -52,16 +57,16 @@ class CreditWalletUseCaseTest {
 
         WalletEvent event = captor.getValue();
         assertEquals("wallet.credited", event.getEventType());
-        assertEquals(1L, event.getWalletId());
+        assertEquals(WALLET_ID, event.getWalletId());
         assertEquals(new BigDecimal("5000"), event.getAmount());
         assertEquals(new BigDecimal("15000"), event.getBalanceAfter());
     }
 
     @Test
     void execute_shouldThrow_whenWalletNotFound() {
-        when(walletService.findById(99L)).thenReturn(Optional.empty());
+        when(walletService.findById(OTHER_ID)).thenReturn(Optional.empty());
 
-        assertThrows(WalletNotFoundException.class, () -> useCase.execute(99L, BigDecimal.TEN));
+        assertThrows(WalletNotFoundException.class, () -> useCase.execute(OTHER_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -69,16 +74,16 @@ class CreditWalletUseCaseTest {
     void execute_shouldThrow_whenWalletNotActive() {
         DomainWallet wallet = buildActiveWallet();
         wallet.setStatus(WalletStatus.FROZEN);
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
-        assertThrows(WalletNotActiveException.class, () -> useCase.execute(1L, BigDecimal.TEN));
+        assertThrows(WalletNotActiveException.class, () -> useCase.execute(WALLET_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
     private DomainWallet buildActiveWallet() {
         DomainWallet w = new DomainWallet();
-        w.setId(1L);
-        w.setCustomerId(100L);
+        w.setId(WALLET_ID);
+        w.setCustomerId(CUSTOMER_ID);
         w.setCurrency("XOF");
         w.setBalance(new BigDecimal("10000"));
         w.setFrozenAmount(BigDecimal.ZERO);

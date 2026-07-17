@@ -2,6 +2,7 @@ package net.tanguydev.walletservice.Domain.UseCases;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Enums.WalletType;
 import net.tanguydev.walletservice.Domain.Events.WalletEvent;
 import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
@@ -27,6 +28,8 @@ public class CreateWalletUseCase implements CreateWalletUseCaseInterface {
         if (wallet.getBalance() == null) wallet.setBalance(BigDecimal.ZERO);
         if (wallet.getFrozenAmount() == null) wallet.setFrozenAmount(BigDecimal.ZERO);
         if (wallet.getStatus() == null) wallet.setStatus(WalletStatus.ACTIVE);
+        if (wallet.getWalletType() == null) wallet.setWalletType(WalletType.PERSONAL);
+        if (wallet.getWalletNumber() == null) wallet.setWalletNumber(generateWalletNumber());
 
         validator.validate(wallet);
         DomainWallet saved = walletService.save(wallet);
@@ -45,5 +48,10 @@ public class CreateWalletUseCase implements CreateWalletUseCaseInterface {
         eventPublisher.publish(event);
 
         return saved;
+    }
+
+    private String generateWalletNumber() {
+        String digits = String.valueOf(System.currentTimeMillis()).substring(3);
+        return "WLT-" + digits;
     }
 }

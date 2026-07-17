@@ -11,6 +11,7 @@ import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotFoundEx
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class FreezeAmountUseCase implements FreezeAmountUseCaseInterface {
 
@@ -24,7 +25,7 @@ public class FreezeAmountUseCase implements FreezeAmountUseCaseInterface {
     }
 
     @Override
-    public DomainWallet execute(Long walletId, BigDecimal amount) {
+    public DomainWallet execute(UUID walletId, BigDecimal amount) {
         DomainWallet wallet = walletService.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
 

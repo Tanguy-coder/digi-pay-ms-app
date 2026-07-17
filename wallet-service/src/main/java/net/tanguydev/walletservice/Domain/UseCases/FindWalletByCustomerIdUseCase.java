@@ -4,6 +4,7 @@ import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public class FindWalletByCustomerIdUseCase implements FindWalletByCustomerIdUseCaseInterface {
 
@@ -14,7 +15,7 @@ public class FindWalletByCustomerIdUseCase implements FindWalletByCustomerIdUseC
     }
 
     @Override
-    public Optional<DomainWallet> execute(Long customerId) {
+    public Optional<DomainWallet> execute(UUID customerId) {
         return walletService.findByCustomerId(customerId);
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class WalletRepository implements WalletRepositoryInterface {
@@ -27,12 +28,12 @@ public class WalletRepository implements WalletRepositoryInterface {
     }
 
     @Override
-    public Optional<DomainWallet> findById(Long id) {
+    public Optional<DomainWallet> findById(UUID id) {
         return walletJpaRepository.findById(id).map(walletMapper::toDomain);
     }
 
     @Override
-    public Optional<DomainWallet> findByCustomerId(Long customerId) {
+    public Optional<DomainWallet> findByCustomerId(UUID customerId) {
         return walletJpaRepository.findByCustomerId(customerId).map(walletMapper::toDomain);
     }
 

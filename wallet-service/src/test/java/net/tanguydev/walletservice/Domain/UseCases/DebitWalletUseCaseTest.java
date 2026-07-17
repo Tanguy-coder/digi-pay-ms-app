@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +34,10 @@ class DebitWalletUseCaseTest {
 
     private DebitWalletUseCase useCase;
 
+    private static final UUID WALLET_ID  = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
+
     @BeforeEach
     void setUp() {
         useCase = new DebitWalletUseCase(walletService, eventPublisher);
@@ -41,10 +46,10 @@ class DebitWalletUseCaseTest {
     @Test
     void execute_shouldDebitAndPublishEvent() {
         DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
         when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        DomainWallet result = useCase.execute(1L, new BigDecimal("3000"));
+        DomainWallet result = useCase.execute(WALLET_ID, new BigDecimal("3000"));
 
         assertEquals(new BigDecimal("7000"), result.getBalance());
 
@@ -60,18 +65,18 @@ class DebitWalletUseCaseTest {
     @Test
     void execute_shouldThrow_whenInsufficientBalance() {
         DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
         assertThrows(InsufficientBalanceException.class,
-                () -> useCase.execute(1L, new BigDecimal("20000")));
+                () -> useCase.execute(WALLET_ID, new BigDecimal("20000")));
         verify(eventPublisher, never()).publish(any());
     }
 
     @Test
     void execute_shouldThrow_whenWalletNotFound() {
-        when(walletService.findById(99L)).thenReturn(Optional.empty());
+        when(walletService.findById(OTHER_ID)).thenReturn(Optional.empty());
 
-        assertThrows(WalletNotFoundException.class, () -> useCase.execute(99L, BigDecimal.TEN));
+        assertThrows(WalletNotFoundException.class, () -> useCase.execute(OTHER_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -79,9 +84,9 @@ class DebitWalletUseCaseTest {
     void execute_shouldThrow_whenWalletNotActive() {
         DomainWallet wallet = buildActiveWallet();
         wallet.setStatus(WalletStatus.CLOSED);
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
-        assertThrows(WalletNotActiveException.class, () -> useCase.execute(1L, BigDecimal.TEN));
+        assertThrows(WalletNotActiveException.class, () -> useCase.execute(WALLET_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -89,17 +94,17 @@ class DebitWalletUseCaseTest {
     void execute_shouldConsiderFrozenAmount() {
         DomainWallet wallet = buildActiveWallet();
         wallet.setFrozenAmount(new BigDecimal("8000"));
-        when(walletService.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
 
         assertThrows(InsufficientBalanceException.class,
-                () -> useCase.execute(1L, new BigDecimal("5000")));
+                () -> useCase.execute(WALLET_ID, new BigDecimal("5000")));
         verify(eventPublisher, never()).publish(any());
     }
 
     private DomainWallet buildActiveWallet() {
         DomainWallet w = new DomainWallet();
-        w.setId(1L);
-        w.setCustomerId(100L);
+        w.setId(WALLET_ID);
+        w.setCustomerId(CUSTOMER_ID);
         w.setCurrency("XOF");
         w.setBalance(new BigDecimal("10000"));
         w.setFrozenAmount(BigDecimal.ZERO);

@@ -10,6 +10,7 @@ import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotFoundEx
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class CreditWalletUseCase implements CreditWalletUseCaseInterface {
 
@@ -23,7 +24,7 @@ public class CreditWalletUseCase implements CreditWalletUseCaseInterface {
     }
 
     @Override
-    public DomainWallet execute(Long walletId, BigDecimal amount) {
+    public DomainWallet execute(UUID walletId, BigDecimal amount) {
         DomainWallet wallet = walletService.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
 

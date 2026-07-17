@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class WalletService implements WalletServiceInterface {
@@ -23,12 +24,12 @@ public class WalletService implements WalletServiceInterface {
     }
 
     @Override
-    public Optional<DomainWallet> findById(Long id) {
+    public Optional<DomainWallet> findById(UUID id) {
         return walletRepository.findById(id);
     }
 
     @Override
-    public Optional<DomainWallet> findByCustomerId(Long customerId) {
+    public Optional<DomainWallet> findByCustomerId(UUID customerId) {
         return walletRepository.findByCustomerId(customerId);
     }
 

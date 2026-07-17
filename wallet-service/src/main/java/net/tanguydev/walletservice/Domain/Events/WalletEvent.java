@@ -4,12 +4,13 @@ import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class WalletEvent {
 
     private String eventType;
-    private Long walletId;
-    private Long customerId;
+    private UUID walletId;
+    private UUID customerId;
     private String currency;
     private BigDecimal amount;
     private BigDecimal balanceAfter;
@@ -17,10 +18,9 @@ public class WalletEvent {
     private WalletStatus status;
     private OffsetDateTime occurredAt;
 
-    public WalletEvent() {
-    }
+    public WalletEvent() {}
 
-    public WalletEvent(String eventType, Long walletId, Long customerId, String currency,
+    public WalletEvent(String eventType, UUID walletId, UUID customerId, String currency,
                        BigDecimal amount, BigDecimal balanceAfter, BigDecimal frozenAmountAfter,
                        WalletStatus status, OffsetDateTime occurredAt) {
         this.eventType = eventType;
@@ -34,75 +34,30 @@ public class WalletEvent {
         this.occurredAt = occurredAt;
     }
 
-    public String getEventType() {
-        return eventType;
-    }
+    public String getEventType() { return eventType; }
+    public void setEventType(String eventType) { this.eventType = eventType; }
 
-    public void setEventType(String eventType) {
-        this.eventType = eventType;
-    }
+    public UUID getWalletId() { return walletId; }
+    public void setWalletId(UUID walletId) { this.walletId = walletId; }
 
-    public Long getWalletId() {
-        return walletId;
-    }
+    public UUID getCustomerId() { return customerId; }
+    public void setCustomerId(UUID customerId) { this.customerId = customerId; }
 
-    public void setWalletId(Long walletId) {
-        this.walletId = walletId;
-    }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
 
-    public Long getCustomerId() {
-        return customerId;
-    }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
 
-    public void setCustomerId(Long customerId) {
-        this.customerId = customerId;
-    }
+    public BigDecimal getBalanceAfter() { return balanceAfter; }
+    public void setBalanceAfter(BigDecimal balanceAfter) { this.balanceAfter = balanceAfter; }
 
-    public String getCurrency() {
-        return currency;
-    }
+    public BigDecimal getFrozenAmountAfter() { return frozenAmountAfter; }
+    public void setFrozenAmountAfter(BigDecimal frozenAmountAfter) { this.frozenAmountAfter = frozenAmountAfter; }
 
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
+    public WalletStatus getStatus() { return status; }
+    public void setStatus(WalletStatus status) { this.status = status; }
 
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public BigDecimal getBalanceAfter() {
-        return balanceAfter;
-    }
-
-    public void setBalanceAfter(BigDecimal balanceAfter) {
-        this.balanceAfter = balanceAfter;
-    }
-
-    public BigDecimal getFrozenAmountAfter() {
-        return frozenAmountAfter;
-    }
-
-    public void setFrozenAmountAfter(BigDecimal frozenAmountAfter) {
-        this.frozenAmountAfter = frozenAmountAfter;
-    }
-
-    public WalletStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(WalletStatus status) {
-        this.status = status;
-    }
-
-    public OffsetDateTime getOccurredAt() {
-        return occurredAt;
-    }
-
-    public void setOccurredAt(OffsetDateTime occurredAt) {
-        this.occurredAt = occurredAt;
-    }
+    public OffsetDateTime getOccurredAt() { return occurredAt; }
+    public void setOccurredAt(OffsetDateTime occurredAt) { this.occurredAt = occurredAt; }
 }
