@@ -60,3 +60,15 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+
+  fraud-service:
+    build: ./fraud-service
+    ports:
+      - "8085:8085"
+    expose:
+      - "8085"
+    container_name: fraud-service
+    depends_on:
+      - kafka
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
