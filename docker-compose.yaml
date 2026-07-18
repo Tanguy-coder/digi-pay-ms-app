@@ -72,3 +72,15 @@ services:
       - kafka
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8086:8086"
+    expose:
+      - "8086"
+    container_name: notification-service
+    depends_on:
+      - kafka
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
