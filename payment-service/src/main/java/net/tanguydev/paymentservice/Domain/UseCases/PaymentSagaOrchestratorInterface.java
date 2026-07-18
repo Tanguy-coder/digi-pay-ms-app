@@ -6,6 +6,12 @@ import java.util.UUID;
 
 public interface PaymentSagaOrchestratorInterface {
 
+    void startFraudCheck(DomainPayment payment);
+
+    void onFraudCleared(UUID paymentId);
+
+    void onFraudBlocked(UUID paymentId, String reason);
+
     void startSaga(DomainPayment payment);
 
     void onDebitSuccess(UUID paymentId);

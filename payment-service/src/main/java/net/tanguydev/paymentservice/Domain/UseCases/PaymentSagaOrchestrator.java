@@ -35,13 +35,51 @@ public class PaymentSagaOrchestrator implements PaymentSagaOrchestratorInterface
     }
 
     /**
-     * Démarre le Saga : crée les 4 étapes en base puis lance le débit du wallet emetteur.
+     * Étape 0 : crée l'étape FRAUD_CHECK et publie payment.initiated pour le fraud-service.
      * Appelé juste après la création du paiement dans InitiatePaymentUseCase.
      */
     @Override
+    public void startFraudCheck(DomainPayment payment) {
+        sagaStepRepository.save(buildStep(payment.getId(), SagaStepName.FRAUD_CHECK, 0, null));
+
+        DomainPayment updated = loadPayment(payment.getId());
+        updated.setStatus(PaymentStatus.FRAUD_CHECK);
+        paymentService.save(updated);
+
+        markStepStarted(payment.getId(), SagaStepName.FRAUD_CHECK);
+    }
+
+    /**
+     * Le fraud-service a retourné CLEARED → on démarre le Saga normal.
+     */
+    @Override
+    public void onFraudCleared(UUID paymentId) {
+        markStepCompleted(paymentId, SagaStepName.FRAUD_CHECK);
+        DomainPayment payment = loadPayment(paymentId);
+        startSaga(payment);
+    }
+
+    /**
+     * Le fraud-service a retourné BLOCKED → paiement FAILED immédiatement.
+     */
+    @Override
+    public void onFraudBlocked(UUID paymentId, String reason) {
+        markStepFailed(paymentId, SagaStepName.FRAUD_CHECK, reason);
+
+        DomainPayment payment = loadPayment(paymentId);
+        payment.setStatus(PaymentStatus.FAILED);
+        payment.setFailureReason("FRAUD_BLOCKED: " + reason);
+        payment.setCompletedAt(OffsetDateTime.now());
+        paymentService.save(payment);
+
+        publishEvent("payment.failed", payment);
+    }
+
+    /**
+     * Démarre le Saga : crée les 4 étapes en base puis lance le débit du wallet emetteur.
+     */
+    @Override
     public void startSaga(DomainPayment payment) {
-        // Étape 1 : débiter l'emetteur. En cas d'échec de l'étape 2,
-        // l'événement de compensation sera "saga.compensate_debit"
         sagaStepRepository.save(buildStep(payment.getId(), SagaStepName.DEBIT_SENDER, 1, "saga.compensate_debit"));
         sagaStepRepository.save(buildStep(payment.getId(), SagaStepName.CREDIT_RECEIVER, 2, null));
         sagaStepRepository.save(buildStep(payment.getId(), SagaStepName.NOTIFY, 3, null));
