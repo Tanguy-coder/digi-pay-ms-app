@@ -42,12 +42,15 @@ spring:
     config:
       enabled: false
 
-server:
-  port: 8085
-
 eureka:
   client:
-    enabled: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+server:
+  port: 8085
 
 management:
   endpoints:

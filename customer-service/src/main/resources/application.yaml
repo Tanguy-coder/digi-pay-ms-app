@@ -24,6 +24,9 @@ spring:
         spring.json.type.mapping: customerEvent:net.tanguydev.customerservice.Domain.Events.CustomerEvent
 eureka:
   client:
-    enabled: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
 server:
   port: 8082

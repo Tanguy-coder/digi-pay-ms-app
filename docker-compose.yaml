@@ -22,6 +22,14 @@ services:
     ports:
       - "6379:6379"
 
+  discovery-service:
+    build: ./discovery-service
+    ports:
+      - "8761:8761"
+    expose:
+      - "8761"
+    container_name: discovery-service
+
   customer-service:
     build: ./customer-service
     ports:
@@ -31,8 +39,10 @@ services:
     container_name: customer-service
     depends_on:
       - kafka
+      - discovery-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
 
   wallet-service:
     build: ./wallet-service
@@ -43,8 +53,10 @@ services:
     container_name: wallet-service
     depends_on:
       - kafka
+      - discovery-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
 
   payment-service:
     build: ./payment-service
@@ -56,10 +68,12 @@ services:
     depends_on:
       - kafka
       - redis
+      - discovery-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
 
   fraud-service:
     build: ./fraud-service
@@ -70,8 +84,10 @@ services:
     container_name: fraud-service
     depends_on:
       - kafka
+      - discovery-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
 
   notification-service:
     build: ./notification-service
@@ -82,5 +98,19 @@ services:
     container_name: notification-service
     depends_on:
       - kafka
+      - discovery-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+
+  gateway-service:
+    build: ./gateway-service
+    ports:
+      - "8888:8888"
+    expose:
+      - "8888"
+    container_name: gateway-service
+    depends_on:
+      - discovery-service
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
