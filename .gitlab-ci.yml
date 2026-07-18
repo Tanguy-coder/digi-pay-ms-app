@@ -1,0 +1,373 @@
+stages:
+  - build
+  - test
+  - security
+  - quality
+  - package
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end"
+  SONAR_HOST_URL: "${SONAR_HOST_URL}"
+  SONAR_TOKEN: "${SONAR_TOKEN}"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .m2/repository/
+
+.service-template: &service-template
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - cd $SERVICE_DIR
+
+# ═══════════════════════════════════════════════════════
+# STAGE 1 — BUILD
+# ═══════════════════════════════════════════════════════
+
+.build-job:
+  <<: *service-template
+  stage: build
+  script:
+    - ./mvnw compile $MAVEN_CLI_OPTS
+  artifacts:
+    paths:
+      - $SERVICE_DIR/target/
+    expire_in: 1 hour
+
+build:customer-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: customer-service
+
+build:wallet-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: wallet-service
+
+build:payment-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: payment-service
+
+build:fraud-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: fraud-service
+
+build:notification-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: notification-service
+
+build:settlement-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: settlement-service
+
+build:discovery-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: discovery-service
+
+build:gateway-service:
+  extends: .build-job
+  variables:
+    SERVICE_DIR: gateway-service
+
+# ═══════════════════════════════════════════════════════
+# STAGE 2 — TEST (unit + integration + coverage)
+# ═══════════════════════════════════════════════════════
+
+.test-job:
+  <<: *service-template
+  stage: test
+  script:
+    - ./mvnw verify $MAVEN_CLI_OPTS -Pcoverage
+  artifacts:
+    paths:
+      - $SERVICE_DIR/target/site/jacoco/
+      - $SERVICE_DIR/target/surefire-reports/
+    reports:
+      junit: $SERVICE_DIR/target/surefire-reports/TEST-*.xml
+    expire_in: 7 days
+  coverage: '/Total.*?([0-9]{1,3})%/'
+
+test:customer-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: customer-service
+  needs: [build:customer-service]
+
+test:wallet-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: wallet-service
+  needs: [build:wallet-service]
+
+test:payment-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: payment-service
+  needs: [build:payment-service]
+
+test:fraud-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: fraud-service
+  needs: [build:fraud-service]
+
+test:notification-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: notification-service
+  needs: [build:notification-service]
+
+test:settlement-service:
+  extends: .test-job
+  variables:
+    SERVICE_DIR: settlement-service
+  needs: [build:settlement-service]
+
+# ═══════════════════════════════════════════════════════
+# STAGE 3 — SECURITY
+# ═══════════════════════════════════════════════════════
+
+# --- OWASP Dependency-Check (CVE scan) ---
+
+.owasp-job:
+  <<: *service-template
+  stage: security
+  script:
+    - ./mvnw org.owasp:dependency-check-maven:check $MAVEN_CLI_OPTS -DfailBuildOnCVSS=7
+  artifacts:
+    paths:
+      - $SERVICE_DIR/target/dependency-check-report.html
+    expire_in: 30 days
+  allow_failure: false
+
+owasp:customer-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: customer-service
+  needs: [build:customer-service]
+
+owasp:wallet-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: wallet-service
+  needs: [build:wallet-service]
+
+owasp:payment-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: payment-service
+  needs: [build:payment-service]
+
+owasp:fraud-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: fraud-service
+  needs: [build:fraud-service]
+
+owasp:notification-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: notification-service
+  needs: [build:notification-service]
+
+owasp:settlement-service:
+  extends: .owasp-job
+  variables:
+    SERVICE_DIR: settlement-service
+  needs: [build:settlement-service]
+
+# --- SpotBugs (static analysis) ---
+
+.spotbugs-job:
+  <<: *service-template
+  stage: security
+  script:
+    - ./mvnw compile spotbugs:check $MAVEN_CLI_OPTS -Pstatic-analysis
+  artifacts:
+    paths:
+      - $SERVICE_DIR/target/spotbugsXml.xml
+    expire_in: 30 days
+  allow_failure: false
+
+spotbugs:customer-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: customer-service
+  needs: [build:customer-service]
+
+spotbugs:wallet-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: wallet-service
+  needs: [build:wallet-service]
+
+spotbugs:payment-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: payment-service
+  needs: [build:payment-service]
+
+spotbugs:fraud-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: fraud-service
+  needs: [build:fraud-service]
+
+spotbugs:notification-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: notification-service
+  needs: [build:notification-service]
+
+spotbugs:settlement-service:
+  extends: .spotbugs-job
+  variables:
+    SERVICE_DIR: settlement-service
+  needs: [build:settlement-service]
+
+# ═══════════════════════════════════════════════════════
+# STAGE 4 — QUALITY GATE (SonarQube)
+# ═══════════════════════════════════════════════════════
+
+.sonar-job:
+  <<: *service-template
+  stage: quality
+  script:
+    - ./mvnw verify sonar:sonar $MAVEN_CLI_OPTS
+      -Pcoverage
+      -Dsonar.host.url=$SONAR_HOST_URL
+      -Dsonar.token=$SONAR_TOKEN
+      -Dsonar.projectKey=digi-pay-$SERVICE_NAME
+      -Dsonar.projectName="Digi-Pay $SERVICE_NAME"
+      -Dsonar.java.coveragePlugin=jacoco
+      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+      -Dsonar.qualitygate.wait=true
+  allow_failure: true
+  rules:
+    - if: '$SONAR_HOST_URL && $SONAR_TOKEN'
+
+sonar:customer-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: customer-service
+    SERVICE_NAME: customer-service
+  needs: [test:customer-service]
+
+sonar:wallet-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: wallet-service
+    SERVICE_NAME: wallet-service
+  needs: [test:wallet-service]
+
+sonar:payment-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: payment-service
+    SERVICE_NAME: payment-service
+  needs: [test:payment-service]
+
+sonar:fraud-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: fraud-service
+    SERVICE_NAME: fraud-service
+  needs: [test:fraud-service]
+
+sonar:notification-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: notification-service
+    SERVICE_NAME: notification-service
+  needs: [test:notification-service]
+
+sonar:settlement-service:
+  extends: .sonar-job
+  variables:
+    SERVICE_DIR: settlement-service
+    SERVICE_NAME: settlement-service
+  needs: [test:settlement-service]
+
+# ═══════════════════════════════════════════════════════
+# STAGE 5 — PACKAGE (Docker images, main branch only)
+# ═══════════════════════════════════════════════════════
+
+.package-job:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - cd $SERVICE_DIR
+    - docker build -t $CI_REGISTRY_IMAGE/$SERVICE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker build -t $CI_REGISTRY_IMAGE/$SERVICE_NAME:latest .
+    - docker push $CI_REGISTRY_IMAGE/$SERVICE_NAME:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/$SERVICE_NAME:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+package:customer-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: customer-service
+    SERVICE_NAME: customer-service
+  needs: [test:customer-service, owasp:customer-service, spotbugs:customer-service]
+
+package:wallet-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: wallet-service
+    SERVICE_NAME: wallet-service
+  needs: [test:wallet-service, owasp:wallet-service, spotbugs:wallet-service]
+
+package:payment-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: payment-service
+    SERVICE_NAME: payment-service
+  needs: [test:payment-service, owasp:payment-service, spotbugs:payment-service]
+
+package:fraud-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: fraud-service
+    SERVICE_NAME: fraud-service
+  needs: [test:fraud-service, owasp:fraud-service, spotbugs:fraud-service]
+
+package:notification-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: notification-service
+    SERVICE_NAME: notification-service
+  needs: [test:notification-service, owasp:notification-service, spotbugs:notification-service]
+
+package:settlement-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: settlement-service
+    SERVICE_NAME: settlement-service
+  needs: [test:settlement-service, owasp:settlement-service, spotbugs:settlement-service]
+
+package:discovery-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: discovery-service
+    SERVICE_NAME: discovery-service
+  needs: [build:discovery-service]
+
+package:gateway-service:
+  extends: .package-job
+  variables:
+    SERVICE_DIR: gateway-service
+    SERVICE_NAME: gateway-service
+  needs: [build:gateway-service]
