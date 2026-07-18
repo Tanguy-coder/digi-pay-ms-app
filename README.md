@@ -49,7 +49,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` | reponses Saga wallet · `fraud-check-events` |
 | **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
 | **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
-| **Settlement MS** | — | Compensation interbancaire · Position nette | `settlement.completed` | `payment.completed` |
+| **Settlement MS** | 8087 | Compensation interbancaire · Position nette · Idempotency par paymentId | `settlement.completed` `settlement.failed` | `payment.completed` |
 
 ## Configuration Kafka
 
@@ -58,8 +58,9 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | `customer-events` | wallet-group | Cycle de vie client |
 | `wallet-commands` | wallet-group | Commandes Saga (DEBIT, CREDIT, COMPENSATE_DEBIT) |
 | `wallet-saga-events` | payment-group | Reponses Saga wallet (SUCCESS, FAILURE) |
-| `payment-events` | fraud-group · notification-payment-group | Flux de paiement central |
+| `payment-events` | fraud-group · notification-payment-group · settlement-group | Flux de paiement central |
 | `fraud-check-events` | payment-fraud-group · notification-fraud-group | Verdict fraude (cleared / blocked / review) |
+| `settlement-events` | — | Resultat du reglement (completed / failed) |
 
 ## Patterns & Concepts avances
 
@@ -69,7 +70,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
 | **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
-| **DDD** | Customer / Wallet / Payment / Fraud / Notification = bounded contexts independants |
+| **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
 ### Saga Pattern — Flux de transfert P2P avec detection fraude
@@ -105,6 +106,13 @@ Wallet MS
 Notification MS
   (en parallele) Recoit payment.initiated / completed / failed / fraud.blocked
   → sauvegarde la notification en base avec statut SENT
+
+Settlement MS
+  10. Recoit payment.completed sur payment-events (group: settlement-group)
+  11. Verifie idempotency (paymentId deja traite → skip)
+  12. Cree un settlement (status PROCESSING) + 2 entries (DEBIT sender, CREDIT receiver)
+  13. Calcule la position nette, passe en COMPLETED
+  14. Publie settlement.completed sur settlement-events
 ```
 
 ## Regles de detection de fraude
@@ -132,8 +140,9 @@ Notification MS
 | Mapping objets | MapStruct 1.5.5 |
 | Tests | JUnit 5, Mockito, @WebMvcTest |
 | Conteneurisation | Docker + Docker Compose |
-| API Gateway | Spring Cloud Gateway (prevu Phase 5) |
-| Observabilite | Prometheus + Zipkin (prevu Phase 5) |
+| Service Discovery | Spring Cloud Netflix Eureka |
+| API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
+| Observabilite | Prometheus + Zipkin (prevu Phase 7) |
 
 ## Architecture logicielle (par service)
 
@@ -167,9 +176,14 @@ digi-pay-ms-app/
 ├── wallet-service/           → Wallet MS   (port 8083)
 ├── payment-service/          → Payment MS  (port 8084)
 ├── fraud-service/            → Fraud MS    (port 8085)
-├── notification-service/     → Notify MS   (port 8086)
-├── docker-compose.yaml       → Kafka + Redis + 5 services
+├── notification-service/     → Notify MS       (port 8086)
+├── settlement-service/       → Settlement MS   (port 8087)
+├── discovery-service/        → Eureka Server   (port 8761)
+├── gateway-service/          → API Gateway     (port 8888)
+├── docker-compose.yaml       → Kafka + Redis + 8 services
 ├── e2e-fraud.sh              → Scenarios E2E fraud detection
+├── e2e-settlement.sh         → Scenarios E2E settlement
+├── e2e-gateway.sh            → Scenarios E2E gateway routing
 └── README.md
 ```
 
@@ -194,12 +208,17 @@ docker compose up --build -d
 # 1. Infrastructure
 docker compose up kafka redis -d
 
-# 2. Services (un terminal par service)
-cd customer-service && ./mvnw spring-boot:run
-cd wallet-service   && ./mvnw spring-boot:run
-cd payment-service  && ./mvnw spring-boot:run
-cd fraud-service    && ./mvnw spring-boot:run
-cd notification-service && ./mvnw spring-boot:run
+# 2. Discovery + Gateway
+cd discovery-service && ./mvnw spring-boot:run
+cd gateway-service   && ./mvnw spring-boot:run
+
+# 3. Services metier (un terminal par service)
+cd customer-service      && ./mvnw spring-boot:run
+cd wallet-service        && ./mvnw spring-boot:run
+cd payment-service       && ./mvnw spring-boot:run
+cd fraud-service         && ./mvnw spring-boot:run
+cd notification-service  && ./mvnw spring-boot:run
+cd settlement-service    && ./mvnw spring-boot:run
 ```
 
 ## Scenarios E2E
@@ -270,6 +289,18 @@ Scenarios couverts :
 - **Scenario 3** : 5 paiements rapides → verdict `REVIEW` (regle `VELOCITY_1MIN`)
 - **Scenario 4** : historique fraud analyses par wallet
 
+### Script E2E complet (settlement)
+
+```bash
+chmod +x e2e-settlement.sh && ./e2e-settlement.sh
+```
+
+Scenarios couverts :
+- **Scenario 1** : paiement completed → settlement cree avec status `COMPLETED`
+- **Scenario 2** : consultation settlement par ID
+- **Scenario 3** : second paiement → second settlement
+- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon settlement
+
 ### Scenarios de test valides
 
 | Scenario | Attendu |
@@ -338,6 +369,20 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | GET | `/api/v1/notifications/wallet/{walletId}` | Notifications par wallet |
 | GET | `/api/v1/notifications/payment/{paymentId}` | Notifications par paiement |
 
+### Settlement Service (port 8087)
+
+| Methode | URL | Description |
+|---|---|---|
+| GET | `/api/settlements` | Lister tous les settlements |
+| GET | `/api/settlements/{id}` | Consulter un settlement par UUID |
+
+### Discovery & Gateway
+
+| Service | Port | Description |
+|---|---|---|
+| Eureka Server | 8761 | Service registry (dashboard: http://localhost:8761) |
+| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka |
+
 ### URLs utiles
 
 | Service | URL |
@@ -352,6 +397,10 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Payment H2 Console | http://localhost:8084/h2-console |
 | Fraud H2 Console | http://localhost:8085/h2-console |
 | Notification H2 Console | http://localhost:8086/h2-console |
+| Settlement API | http://localhost:8087/api/settlements |
+| Settlement H2 Console | http://localhost:8087/h2-console |
+| Eureka Dashboard | http://localhost:8761 |
+| Gateway | http://localhost:8888 |
 
 ## Communication Kafka entre services
 
@@ -406,6 +455,7 @@ cd wallet-service        && ./mvnw test
 cd payment-service       && ./mvnw test
 cd fraud-service         && ./mvnw test
 cd notification-service  && ./mvnw test
+cd settlement-service    && ./mvnw test
 ```
 
 | Service | Tests | Couverture |
@@ -415,7 +465,8 @@ cd notification-service  && ./mvnw test
 | payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
-| **Total** | **86** | |
+| settlement-service | 14 | ProcessPaymentSettlementUseCase (5) + SettlementController (4) + PaymentEventConsumer (4) + ApplicationContext (1) |
+| **Total** | **100** | |
 
 ## Roadmap
 
@@ -425,8 +476,9 @@ cd notification-service  && ./mvnw test
 | Phase 2 | Customer MS + Wallet MS + Kafka events + Tests | Termine |
 | Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + Tests E2E | Termine |
 | Phase 4 | Fraud Detection MS + Notification MS | Termine |
-| Phase 5 | API Gateway (Spring Cloud Gateway) | A venir |
-| Phase 6 | Observabilite (Prometheus + Zipkin) + CI/CD | A venir |
+| Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Termine |
+| Phase 6 | Settlement MS (compensation interbancaire, position nette, 14 tests) | Termine |
+| Phase 7 | Observabilite (Prometheus + Zipkin) + CI/CD | A venir |
 
 ## Approfondissements prevus (Senior+)
 
