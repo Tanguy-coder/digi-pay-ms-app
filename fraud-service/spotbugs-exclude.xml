@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude Lombok-generated code -->
+    <Match>
+        <Source name="~.*\.java"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Exclude Spring configuration classes -->
+    <Match>
+        <Package name="~.*\.Infrastructure\.Config"/>
+    </Match>
+    <!-- Exclude JPA models (Lombok @Builder/@Setter) -->
+    <Match>
+        <Package name="~.*\.Infrastructure\.Models"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>
