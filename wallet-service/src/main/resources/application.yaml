@@ -32,6 +32,9 @@ spring:
         spring.json.value.default.type: java.util.HashMap
 eureka:
   client:
-    enabled: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
 server:
   port: 8083
