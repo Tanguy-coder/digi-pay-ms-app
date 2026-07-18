@@ -444,6 +444,25 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
                               │  onFraudBlocked →        │                             │
                               │  paiement FAILED         │   └─────────────────────────┘
                               └──────────────────────────┘
+
+                                         [payment-events] payment.completed
+                                                            │
+                                             ┌──────────────▼──────────┐
+                                             │   Settlement Service     │
+                                             │      (port 8087)         │
+                                             │                          │
+                                             │  Consomme:               │
+                                             │  - payment.completed     │
+                                             │                          │
+                                             │  Cree settlement +       │
+                                             │  2 entries (DEBIT/CREDIT)│
+                                             │  Idempotency paymentId   │
+                                             │                          │
+                                             │  Publie:                 │
+                                             │  - settlement.completed  │
+                                             │  - settlement.failed     │
+                                             │  → [settlement-events]   │
+                                             └──────────────────────────┘
 ```
 
 ## Tests
