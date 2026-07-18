@@ -46,7 +46,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 |---|---|---|---|---|
 | **Customer MS** | 8082 | Creation client · KYC · Infos personnelles | `customer.created` | — |
 | **Wallet MS** | 8083 | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` · commandes Saga |
-| **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` | reponses Saga wallet · `fraud-check-events` |
+| **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | reponses Saga wallet · `fraud-check-events` |
 | **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
 | **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
 | **Settlement MS** | 8087 | Compensation interbancaire · Position nette · Idempotency par paymentId | `settlement.completed` `settlement.failed` | `payment.completed` |
@@ -56,8 +56,9 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | Topic | Consumer Group(s) | Usage |
 |---|---|---|
 | `customer-events` | wallet-group | Cycle de vie client |
-| `wallet-commands` | wallet-group | Commandes Saga (DEBIT, CREDIT, COMPENSATE_DEBIT) |
-| `wallet-saga-events` | payment-group | Reponses Saga wallet (SUCCESS, FAILURE) |
+| `wallet-commands` | wallet-saga-group | Commandes Saga (DEBIT, CREDIT, COMPENSATE_DEBIT) |
+| `wallet-events` | — | Evenements wallet (created, credited, debited) |
+| `wallet-saga-events` | payment-saga-group | Reponses Saga wallet (SUCCESS, FAILURE) |
 | `payment-events` | fraud-group · notification-payment-group · settlement-group | Flux de paiement central |
 | `fraud-check-events` | payment-fraud-group · notification-fraud-group | Verdict fraude (cleared / blocked / review) |
 | `settlement-events` | — | Resultat du reglement (completed / failed) |
@@ -84,8 +85,9 @@ Payment MS
 
 Fraud MS
   5. Recoit payment.initiated, evalue les 7 regles actives
-  5a. Score <= 80 → publie fraud.cleared sur fraud-check-events
-  5b. Score > 80 ou regle BLOCK → publie fraud.blocked
+  5a. Score 0-30 → publie fraud.cleared sur fraud-check-events
+  5b. Score 31-80 → publie fraud.review
+  5c. Score > 80 ou regle BLOCK → publie fraud.blocked
 
 Payment MS
   6a. (fraud.cleared) → envoie DEBIT_WALLET sur wallet-commands
@@ -102,6 +104,7 @@ Payment MS
 Wallet MS
   9a. Credit Bob reussi → publie CREDIT_SUCCESS → paiement COMPLETED
   9b. Credit Bob echoue → publie CREDIT_FAILED → COMPENSATE_DEBIT → paiement REVERSED
+  9c. Si compensation echoue → paiement COMPENSATION_FAILED
 
 Notification MS
   (en parallele) Recoit payment.initiated / completed / failed / fraud.blocked
@@ -120,12 +123,12 @@ Settlement MS
 | Code | Condition | Score | Action | Priorite |
 |---|---|---|---|---|
 | `HIGH_AMOUNT` | Montant > 10 000 | 85 | BLOCK | CRITICAL |
-| `VELOCITY_1MIN` | > 5 tx / minute / compte | 40 | REVIEW | HIGH |
-| `VELOCITY_1H` | > 20 tx / heure / compte | 25 | FLAG | MEDIUM |
+| `VELOCITY_1MIN` | >= 3 tx / minute / compte | 40 | REVIEW | HIGH |
+| `VELOCITY_1H` | >= 10 tx / heure / compte | 25 | FLAG | MEDIUM |
 | `RISKY_COUNTRY_KP` | Pays = KP (Coree du Nord) | 90 | BLOCK | CRITICAL |
 | `RISKY_COUNTRY_IR` | Pays = IR (Iran) | 90 | BLOCK | CRITICAL |
-| `NEW_DEVICE` | Nouveau device + montant > 500 | 20 | CHALLENGE_OTP | MEDIUM |
-| `SUSPICIOUS_HOUR` | Heure entre 2h-5h UTC | 15 | FLAG | LOW |
+| `NEW_DEVICE` | Nouveau device (non reconnu) | 20 | CHALLENGE_OTP | MEDIUM |
+| `SUSPICIOUS_HOUR` | Heure entre 0h-5h UTC | 15 | FLAG | LOW |
 
 **Score → Verdict** : 0-30 = CLEARED · 31-60 = REVIEW · 61-80 = FLAGGED · 81-100 = BLOCKED
 
@@ -180,7 +183,7 @@ digi-pay-ms-app/
 ├── settlement-service/       → Settlement MS   (port 8087)
 ├── discovery-service/        → Eureka Server   (port 8761)
 ├── gateway-service/          → API Gateway     (port 8888)
-├── docker-compose.yaml       → Kafka + Redis + 8 services
+├── docker-compose.yaml       → Kafka + Redis + 7 services applicatifs
 ├── e2e-fraud.sh              → Scenarios E2E fraud detection
 ├── e2e-settlement.sh         → Scenarios E2E settlement
 ├── e2e-gateway.sh            → Scenarios E2E gateway routing
@@ -286,7 +289,7 @@ chmod +x e2e-fraud.sh && ./e2e-fraud.sh
 Scenarios couverts :
 - **Scenario 1** : paiement 100 EUR → verdict `CLEARED`
 - **Scenario 2** : paiement 15 000 EUR → verdict `BLOCKED` (regle `HIGH_AMOUNT`)
-- **Scenario 3** : 5 paiements rapides → verdict `REVIEW` (regle `VELOCITY_1MIN`)
+- **Scenario 3** : 3+ paiements rapides → verdict `REVIEW` (regle `VELOCITY_1MIN`)
 - **Scenario 4** : historique fraud analyses par wallet
 
 ### Script E2E complet (settlement)
@@ -479,13 +482,13 @@ cd settlement-service    && ./mvnw test
 
 | Service | Tests | Couverture |
 |---|---|---|
-| customer-service | 8 | Use cases (create, find, update) + Integration controller |
-| wallet-service | 21 | Use cases (4) + Controller (7) + Integration |
+| customer-service | 19 | Use cases (create, find, update) + Integration controller |
+| wallet-service | 23 | Use cases + Controller + Integration |
 | payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
 | settlement-service | 14 | ProcessPaymentSettlementUseCase (5) + SettlementController (4) + PaymentEventConsumer (4) + ApplicationContext (1) |
-| **Total** | **100** | |
+| **Total** | **115** | |
 
 ## Roadmap
 
