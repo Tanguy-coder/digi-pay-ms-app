@@ -69,8 +69,8 @@ public class InitiatePaymentUseCase implements InitiatePaymentUseCaseInterface {
         event.setOccurredAt(OffsetDateTime.now());
         eventPublisher.publish(event);
 
-        // Démarre le Saga : crée les étapes et envoie la première commande (DEBIT)
-        sagaOrchestrator.startSaga(saved);
+        // Démarre le Saga par le fraud check (étape 0)
+        sagaOrchestrator.startFraudCheck(saved);
 
         return saved;
     }
