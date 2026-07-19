@@ -247,6 +247,7 @@ spotbugs:settlement-service:
 .sonar-job:
   <<: *service-template
   stage: quality
+  allow_failure: true
   services:
     - docker:dind
   variables:

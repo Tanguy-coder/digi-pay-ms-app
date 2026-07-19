@@ -14,4 +14,10 @@
         <Package name="~.*\.Infrastructure\.Models"/>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
+    <!-- isNewDevice intentionally returns null when deviceFingerprint is absent (= unknown) -->
+    <Match>
+        <Class name="net.tanguydev.fraudservice.Domain.UseCases.AnalyzePaymentUseCase"/>
+        <Method name="isNewDevice"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>
