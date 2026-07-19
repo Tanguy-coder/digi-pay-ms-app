@@ -60,7 +60,7 @@ class InitiatePaymentUseCaseTest {
         assertEquals("payment.initiated", eventCaptor.getValue().getEventType());
         assertEquals(PAYMENT_ID, eventCaptor.getValue().getPaymentId());
 
-        verify(sagaOrchestrator).startSaga(saved);
+        verify(sagaOrchestrator).startFraudCheck(saved);
     }
 
     @Test
@@ -95,7 +95,7 @@ class InitiatePaymentUseCaseTest {
         assertThrows(DuplicatePaymentException.class, () -> useCase.execute(input));
 
         verify(paymentService, never()).save(any());
-        verify(sagaOrchestrator, never()).startSaga(any());
+        verify(sagaOrchestrator, never()).startFraudCheck(any());
     }
 
     private DomainPayment buildInput() {
