@@ -45,7 +45,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | Microservice | Port | Responsabilites | Publie | Consomme |
 |---|---|---|---|---|
 | **Customer MS** | 8082 | Creation client · KYC · Infos personnelles | `customer.created` | — |
-| **Wallet MS** | 8083 | Portefeuille · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` · commandes Saga |
+| **Wallet MS** | 8083 | Portefeuille · Event Sourcing · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` · commandes Saga |
 | **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | reponses Saga wallet · `fraud-check-events` |
 | **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
 | **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
@@ -67,6 +67,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 
 | Pattern | Application dans ce projet |
 |---|---|
+| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Le solde n'est jamais modifie directement — il est calcule en rejouant WALLET_CREATED → WALLET_CREDITED → WALLET_DEBITED → AMOUNT_FROZEN. Endpoint `/history` pour consulter toutes les operations. |
 | **Saga (Orchestration)** | Payment MS orchestrate DEBIT → FRAUD_CHECK → CREDIT → COMPLETE; compensation automatique si une etape echoue |
 | **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
@@ -154,9 +155,11 @@ Chaque microservice suit une **architecture hexagonale** (Clean Architecture / P
 ```
 service/
 ├── Domain/                          # Coeur metier (zero dependance framework)
+│   ├── Aggregates/                  # Event-sourced aggregates (ex: WalletAggregate)
 │   ├── Entities/                    # Entites metier pures
 │   ├── Enums/                       # Enumerations du domaine
-│   ├── Ports/                       # Interfaces de persistance / publication
+│   ├── Events/                      # Evenements domaine (WalletEventEntry, WalletEvent)
+│   ├── Ports/                       # Interfaces de persistance / publication / event store
 │   ├── Presenters/                  # Interface de presentation (1 classe = 1 responsabilite)
 │   ├── Responses/                   # DTOs de sortie (1 fichier = 1 DTO)
 │   └── UseCases/                    # Command + Interface + Implementation
@@ -165,8 +168,9 @@ service/
     ├── Config/                      # DomainConfig (beans use cases) + PresentationConfig (presenter)
     ├── Consumers/                   # Kafka consumers
     ├── Controllers/                 # API REST
+    ├── EventStore/                  # Event Store PostgreSQL (append-only, table wallet_events)
     ├── Mappers/                     # MapStruct : Domain <-> JPA <-> Response
-    ├── Models/                      # Entites JPA
+    ├── Models/                      # Entites JPA (projection / read model)
     ├── Presenters/                  # Implementation des interfaces presenter
     └── Repositories/                # JpaRepository + adaptateur hexagonal
 ```
@@ -331,6 +335,7 @@ Scenarios couverts :
 |---|---|---|
 | GET | `/api/v1/wallets/{id}` | Trouver par UUID |
 | GET | `/api/v1/wallets/customer/{customerId}` | Trouver par UUID client |
+| GET | `/api/v1/wallets/{id}/history` | Historique complet des operations (Event Sourcing) |
 | POST | `/api/v1/wallets/{id}/credit?amount=X` | Crediter |
 | POST | `/api/v1/wallets/{id}/debit?amount=X` | Debiter |
 | POST | `/api/v1/wallets/{id}/freeze?amount=X` | Geler |
@@ -483,12 +488,12 @@ cd settlement-service    && ./mvnw test
 | Service | Tests | Couverture |
 |---|---|---|
 | customer-service | 19 | Use cases (create, find, update) + Integration controller |
-| wallet-service | 23 | Use cases + Controller + Integration |
+| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + Controller (7) + History (2) + Integration (1) |
 | payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
 | settlement-service | 14 | ProcessPaymentSettlementUseCase (5) + SettlementController (4) + PaymentEventConsumer (4) + ApplicationContext (1) |
-| **Total** | **115** | |
+| **Total** | **124** | |
 
 ## Roadmap
 
@@ -500,7 +505,8 @@ cd settlement-service    && ./mvnw test
 | Phase 4 | Fraud Detection MS + Notification MS | Termine |
 | Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Termine |
 | Phase 6 | Settlement MS (compensation interbancaire, position nette, 14 tests) | Termine |
-| Phase 7 | Observabilite (Prometheus + Zipkin) + CI/CD | A venir |
+| Phase 7 | Event Sourcing (Wallet MS) + CI/CD GitLab | Termine |
+| Phase 8 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 

@@ -4,6 +4,8 @@ import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
 import net.tanguydev.walletservice.Domain.Enums.WalletType;
 import net.tanguydev.walletservice.Domain.Events.WalletEvent;
+import net.tanguydev.walletservice.Domain.Events.WalletEventEntry;
+import net.tanguydev.walletservice.Domain.Ports.EventStoreInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,11 +25,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CreateWalletUseCaseTest {
 
-    @Mock
-    private WalletServiceInterface walletService;
-
-    @Mock
-    private WalletEventPublisherInterface eventPublisher;
+    @Mock private WalletServiceInterface walletService;
+    @Mock private WalletEventPublisherInterface eventPublisher;
+    @Mock private EventStoreInterface eventStore;
 
     private CreateWalletUseCase useCase;
 
@@ -36,41 +36,33 @@ class CreateWalletUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new CreateWalletUseCase(walletService, eventPublisher);
+        useCase = new CreateWalletUseCase(walletService, eventPublisher, eventStore);
     }
 
     @Test
-    void execute_shouldCreateWalletAndPublishEvent() {
+    void execute_shouldPersistEventAndPublishToKafka() {
         DomainWallet wallet = new DomainWallet();
         wallet.setCustomerId(CUSTOMER_ID);
         wallet.setCurrency("XOF");
 
-        DomainWallet saved = new DomainWallet();
-        saved.setId(WALLET_ID);
-        saved.setCustomerId(CUSTOMER_ID);
-        saved.setWalletType(WalletType.PERSONAL);
-        saved.setWalletNumber("WLT-0000000001");
-        saved.setCurrency("XOF");
-        saved.setBalance(BigDecimal.ZERO);
-        saved.setFrozenAmount(BigDecimal.ZERO);
-        saved.setStatus(WalletStatus.ACTIVE);
-
-        when(walletService.save(any(DomainWallet.class))).thenReturn(saved);
+        when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DomainWallet result = useCase.execute(wallet);
 
         assertNotNull(result);
-        assertEquals(WALLET_ID, result.getId());
+        assertNotNull(result.getId());
+        assertEquals(CUSTOMER_ID, result.getCustomerId());
         assertEquals(WalletStatus.ACTIVE, result.getStatus());
+        assertEquals(BigDecimal.ZERO, result.getBalance());
 
-        ArgumentCaptor<WalletEvent> captor = ArgumentCaptor.forClass(WalletEvent.class);
-        verify(eventPublisher).publish(captor.capture());
+        ArgumentCaptor<WalletEventEntry> entryCaptor = ArgumentCaptor.forClass(WalletEventEntry.class);
+        verify(eventStore).append(entryCaptor.capture());
+        assertEquals(net.tanguydev.walletservice.Domain.Enums.WalletEventType.WALLET_CREATED,
+                entryCaptor.getValue().getEventType());
 
-        WalletEvent event = captor.getValue();
-        assertEquals("wallet.created", event.getEventType());
-        assertEquals(WALLET_ID, event.getWalletId());
-        assertEquals(CUSTOMER_ID, event.getCustomerId());
-        assertEquals("XOF", event.getCurrency());
+        ArgumentCaptor<WalletEvent> kafkaCaptor = ArgumentCaptor.forClass(WalletEvent.class);
+        verify(eventPublisher).publish(kafkaCaptor.capture());
+        assertEquals("wallet.created", kafkaCaptor.getValue().getEventType());
     }
 
     @Test
@@ -79,11 +71,7 @@ class CreateWalletUseCaseTest {
         wallet.setCustomerId(CUSTOMER_ID);
         wallet.setCurrency("XOF");
 
-        when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> {
-            DomainWallet w = inv.getArgument(0);
-            w.setId(WALLET_ID);
-            return w;
-        });
+        when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DomainWallet result = useCase.execute(wallet);
 
@@ -92,5 +80,6 @@ class CreateWalletUseCaseTest {
         assertEquals(WalletStatus.ACTIVE, result.getStatus());
         assertEquals(WalletType.PERSONAL, result.getWalletType());
         assertNotNull(result.getWalletNumber());
+        assertTrue(result.getWalletNumber().startsWith("WLT-"));
     }
 }

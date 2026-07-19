@@ -2,6 +2,7 @@ package net.tanguydev.walletservice.Infrastructure.Controllers;
 
 import jakarta.validation.Valid;
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
+import net.tanguydev.walletservice.Domain.Events.WalletEventEntry;
 import net.tanguydev.walletservice.Domain.Presenters.WalletPresenterInterface;
 import net.tanguydev.walletservice.Domain.Responses.WalletResponse;
 import net.tanguydev.walletservice.Domain.UseCases.*;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +25,7 @@ public class WalletController {
     private final CreditWalletUseCaseInterface credit;
     private final DebitWalletUseCaseInterface debit;
     private final FreezeAmountUseCaseInterface freeze;
+    private final GetWalletHistoryUseCaseInterface getHistory;
     private final WalletPresenterInterface presenter;
     private final WalletMapper mapper;
 
@@ -32,6 +35,7 @@ public class WalletController {
                             CreditWalletUseCaseInterface credit,
                             DebitWalletUseCaseInterface debit,
                             FreezeAmountUseCaseInterface freeze,
+                            GetWalletHistoryUseCaseInterface getHistory,
                             WalletPresenterInterface presenter,
                             WalletMapper mapper) {
         this.create = create;
@@ -40,6 +44,7 @@ public class WalletController {
         this.credit = credit;
         this.debit = debit;
         this.freeze = freeze;
+        this.getHistory = getHistory;
         this.presenter = presenter;
         this.mapper = mapper;
     }
@@ -83,5 +88,11 @@ public class WalletController {
     public ResponseEntity<WalletResponse> freeze(@PathVariable UUID id, @RequestParam BigDecimal amount) {
         DomainWallet frozen = freeze.execute(id, amount);
         return ResponseEntity.ok(presenter.present(frozen));
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<WalletEventEntry>> history(@PathVariable UUID id) {
+        List<WalletEventEntry> events = getHistory.execute(id);
+        return ResponseEntity.ok(events);
     }
 }

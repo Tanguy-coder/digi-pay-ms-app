@@ -1,5 +1,6 @@
 package net.tanguydev.walletservice.Infrastructure.Config;
 
+import net.tanguydev.walletservice.Domain.Ports.EventStoreInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.UseCases.*;
@@ -11,8 +12,9 @@ public class DomainConfig {
 
     @Bean
     public CreateWalletUseCase createWalletUseCase(WalletServiceInterface walletService,
-                                                   WalletEventPublisherInterface eventPublisher) {
-        return new CreateWalletUseCase(walletService, eventPublisher);
+                                                   WalletEventPublisherInterface eventPublisher,
+                                                   EventStoreInterface eventStore) {
+        return new CreateWalletUseCase(walletService, eventPublisher, eventStore);
     }
 
     @Bean
@@ -27,19 +29,27 @@ public class DomainConfig {
 
     @Bean
     public CreditWalletUseCase creditWalletUseCase(WalletServiceInterface walletService,
-                                                   WalletEventPublisherInterface eventPublisher) {
-        return new CreditWalletUseCase(walletService, eventPublisher);
+                                                   WalletEventPublisherInterface eventPublisher,
+                                                   EventStoreInterface eventStore) {
+        return new CreditWalletUseCase(walletService, eventPublisher, eventStore);
     }
 
     @Bean
     public DebitWalletUseCase debitWalletUseCase(WalletServiceInterface walletService,
-                                                 WalletEventPublisherInterface eventPublisher) {
-        return new DebitWalletUseCase(walletService, eventPublisher);
+                                                 WalletEventPublisherInterface eventPublisher,
+                                                 EventStoreInterface eventStore) {
+        return new DebitWalletUseCase(walletService, eventPublisher, eventStore);
     }
 
     @Bean
     public FreezeAmountUseCase freezeAmountUseCase(WalletServiceInterface walletService,
-                                                   WalletEventPublisherInterface eventPublisher) {
-        return new FreezeAmountUseCase(walletService, eventPublisher);
+                                                   WalletEventPublisherInterface eventPublisher,
+                                                   EventStoreInterface eventStore) {
+        return new FreezeAmountUseCase(walletService, eventPublisher, eventStore);
+    }
+
+    @Bean
+    public GetWalletHistoryUseCase getWalletHistoryUseCase(EventStoreInterface eventStore) {
+        return new GetWalletHistoryUseCase(eventStore);
     }
 }
