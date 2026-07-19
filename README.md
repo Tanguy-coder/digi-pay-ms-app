@@ -423,13 +423,21 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
  │  Wallet Service  │◀──[wallet-commands]────│      Payment Service         │
  │    (port 8083)   │   DEBIT_WALLET         │        (port 8084)           │
  │                  │   CREDIT_WALLET        │                              │
- │  Auto-cree le    │   COMPENSATE_DEBIT     │  Saga Orchestration          │
- │  wallet a la     │                        │  Idempotency Redis (TTL 24h) │
- │  reception de    │──[wallet-saga-events]─▶│  Statuts: INITIATED →        │
- │  customer.created│   DEBIT_SUCCESS        │  FRAUD_CHECK → PROCESSING →  │
- │                  │   CREDIT_SUCCESS       │  COMPLETED / FAILED          │
- └──────────────────┘   CREDIT_FAILED        └──────────────┬───────────────┘
-                                                            │ [payment-events]
+ │  EVENT SOURCING  │   COMPENSATE_DEBIT     │  Saga Orchestration          │
+ │                  │                        │  Idempotency Redis (TTL 24h) │
+ │  wallet_events   │──[wallet-saga-events]─▶│  Statuts: INITIATED →        │
+ │  (append-only)   │   DEBIT_SUCCESS        │  FRAUD_CHECK → PROCESSING →  │
+ │  ↓ projection    │   CREDIT_SUCCESS       │  COMPLETED / FAILED          │
+ │  wallets (read)  │   CREDIT_FAILED        └──────────────┬───────────────┘
+ │                  │                                        │
+ │  Auto-cree le    │                                        │
+ │  wallet a la     │                                        │
+ │  reception de    │                                        │
+ │  customer.created│                                        │
+ │                  │                                        │
+ │  GET /history →  │                                        │
+ │  replay events   │                                        │
+ └──────────────────┘                                        │ [payment-events]
                                              ┌──────────────┴───────────────┐
                                              │                              │
                               ┌──────────────▼──────────┐   ┌──────────────▼──────────┐
