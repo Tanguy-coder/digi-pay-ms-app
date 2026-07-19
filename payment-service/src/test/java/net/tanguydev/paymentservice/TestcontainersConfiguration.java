@@ -1,5 +1,6 @@
-package net.tanguydev.customerservice;
+package net.tanguydev.paymentservice;
 
+import com.redis.testcontainers.RedisContainer;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,12 @@ public class TestcontainersConfiguration {
     @ServiceConnection
     KafkaContainer kafkaContainer() {
         return new KafkaContainer(DockerImageName.parse("apache/kafka-native:latest"));
+    }
+
+    @Bean
+    @ServiceConnection
+    RedisContainer redisContainer() {
+        return new RedisContainer(DockerImageName.parse("redis:latest"));
     }
 
 }

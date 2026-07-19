@@ -86,6 +86,7 @@ build:gateway-service:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_RYUK_DISABLED: "true"
+    TESTCONTAINERS_HOST_OVERRIDE: docker
   script:
     - ./mvnw verify $MAVEN_CLI_OPTS -Pcoverage
   artifacts:
@@ -252,6 +253,7 @@ spotbugs:settlement-service:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_RYUK_DISABLED: "true"
+    TESTCONTAINERS_HOST_OVERRIDE: docker
     SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
     GIT_DEPTH: "0"
   cache:

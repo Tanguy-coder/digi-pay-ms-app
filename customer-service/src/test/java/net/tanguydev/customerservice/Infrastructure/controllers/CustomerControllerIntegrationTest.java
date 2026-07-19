@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.tanguydev.customerservice.Infrastructure.Models.Customer;
 import net.tanguydev.customerservice.Infrastructure.Repositories.CustomerJpaRepository;
 import net.tanguydev.customerservice.Infrastructure.Requests.CustomerRequest;
+import net.tanguydev.customerservice.TestcontainersConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,7 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@org.springframework.test.context.ActiveProfiles("test")
+@Import(TestcontainersConfiguration.class)
 class CustomerControllerIntegrationTest {
 
     @Autowired
