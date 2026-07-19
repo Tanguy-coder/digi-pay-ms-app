@@ -35,6 +35,7 @@ class WalletControllerTest {
     @MockitoBean private CreditWalletUseCaseInterface credit;
     @MockitoBean private DebitWalletUseCaseInterface debit;
     @MockitoBean private FreezeAmountUseCaseInterface freeze;
+    @MockitoBean private GetWalletHistoryUseCaseInterface getHistory;
     @MockitoBean private WalletPresenterInterface presenter;
     @MockitoBean private WalletMapper mapper;
 

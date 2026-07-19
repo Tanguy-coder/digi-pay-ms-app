@@ -1,8 +1,12 @@
 package net.tanguydev.walletservice.Domain.UseCases;
 
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
+import net.tanguydev.walletservice.Domain.Enums.WalletEventType;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
+import net.tanguydev.walletservice.Domain.Enums.WalletType;
 import net.tanguydev.walletservice.Domain.Events.WalletEvent;
+import net.tanguydev.walletservice.Domain.Events.WalletEventEntry;
+import net.tanguydev.walletservice.Domain.Ports.EventStoreInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
 import net.tanguydev.walletservice.Domain.Ports.WalletServiceInterface;
 import net.tanguydev.walletservice.Domain.Validations.Exception.InsufficientBalanceException;
@@ -16,7 +20,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.Optional;
+import java.time.OffsetDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,46 +32,42 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class DebitWalletUseCaseTest {
 
-    @Mock
-    private WalletServiceInterface walletService;
-
-    @Mock
-    private WalletEventPublisherInterface eventPublisher;
+    @Mock private WalletServiceInterface walletService;
+    @Mock private WalletEventPublisherInterface eventPublisher;
+    @Mock private EventStoreInterface eventStore;
 
     private DebitWalletUseCase useCase;
 
-    private static final UUID WALLET_ID  = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID OTHER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID WALLET_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
 
     @BeforeEach
     void setUp() {
-        useCase = new DebitWalletUseCase(walletService, eventPublisher);
+        useCase = new DebitWalletUseCase(walletService, eventPublisher, eventStore);
     }
 
     @Test
     void execute_shouldDebitAndPublishEvent() {
-        DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+        when(eventStore.loadEvents(WALLET_ID)).thenReturn(buildWalletWithBalance(new BigDecimal("10000")));
         when(walletService.save(any(DomainWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DomainWallet result = useCase.execute(WALLET_ID, new BigDecimal("3000"));
 
         assertEquals(new BigDecimal("7000"), result.getBalance());
 
-        ArgumentCaptor<WalletEvent> captor = ArgumentCaptor.forClass(WalletEvent.class);
-        verify(eventPublisher).publish(captor.capture());
+        ArgumentCaptor<WalletEventEntry> storeCaptor = ArgumentCaptor.forClass(WalletEventEntry.class);
+        verify(eventStore).append(storeCaptor.capture());
+        assertEquals(WalletEventType.WALLET_DEBITED, storeCaptor.getValue().getEventType());
 
-        WalletEvent event = captor.getValue();
-        assertEquals("wallet.debited", event.getEventType());
-        assertEquals(new BigDecimal("3000"), event.getAmount());
-        assertEquals(new BigDecimal("7000"), event.getBalanceAfter());
+        ArgumentCaptor<WalletEvent> kafkaCaptor = ArgumentCaptor.forClass(WalletEvent.class);
+        verify(eventPublisher).publish(kafkaCaptor.capture());
+        assertEquals("wallet.debited", kafkaCaptor.getValue().getEventType());
+        assertEquals(new BigDecimal("7000"), kafkaCaptor.getValue().getBalanceAfter());
     }
 
     @Test
     void execute_shouldThrow_whenInsufficientBalance() {
-        DomainWallet wallet = buildActiveWallet();
-        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+        when(eventStore.loadEvents(WALLET_ID)).thenReturn(buildWalletWithBalance(new BigDecimal("10000")));
 
         assertThrows(InsufficientBalanceException.class,
                 () -> useCase.execute(WALLET_ID, new BigDecimal("20000")));
@@ -74,17 +76,26 @@ class DebitWalletUseCaseTest {
 
     @Test
     void execute_shouldThrow_whenWalletNotFound() {
-        when(walletService.findById(OTHER_ID)).thenReturn(Optional.empty());
+        when(eventStore.loadEvents(WALLET_ID)).thenReturn(Collections.emptyList());
 
-        assertThrows(WalletNotFoundException.class, () -> useCase.execute(OTHER_ID, BigDecimal.TEN));
+        assertThrows(WalletNotFoundException.class, () -> useCase.execute(WALLET_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
     }
 
     @Test
     void execute_shouldThrow_whenWalletNotActive() {
-        DomainWallet wallet = buildActiveWallet();
-        wallet.setStatus(WalletStatus.CLOSED);
-        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+        WalletEventEntry created = new WalletEventEntry();
+        created.setWalletId(WALLET_ID);
+        created.setEventType(WalletEventType.WALLET_CREATED);
+        created.setCustomerId(CUSTOMER_ID);
+        created.setWalletNumber("WLT-001");
+        created.setWalletType(WalletType.PERSONAL);
+        created.setCurrency("XOF");
+        created.setStatus(WalletStatus.CLOSED);
+        created.setAggregateVersion(1L);
+        created.setOccurredAt(OffsetDateTime.now());
+
+        when(eventStore.loadEvents(WALLET_ID)).thenReturn(List.of(created));
 
         assertThrows(WalletNotActiveException.class, () -> useCase.execute(WALLET_ID, BigDecimal.TEN));
         verify(eventPublisher, never()).publish(any());
@@ -92,23 +103,43 @@ class DebitWalletUseCaseTest {
 
     @Test
     void execute_shouldConsiderFrozenAmount() {
-        DomainWallet wallet = buildActiveWallet();
-        wallet.setFrozenAmount(new BigDecimal("8000"));
-        when(walletService.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+        List<WalletEventEntry> events = buildWalletWithBalance(new BigDecimal("10000"));
+        WalletEventEntry freeze = new WalletEventEntry();
+        freeze.setWalletId(WALLET_ID);
+        freeze.setEventType(WalletEventType.AMOUNT_FROZEN);
+        freeze.setAmount(new BigDecimal("8000"));
+        freeze.setAggregateVersion(3L);
+        freeze.setOccurredAt(OffsetDateTime.now());
+
+        List<WalletEventEntry> allEvents = new java.util.ArrayList<>(events);
+        allEvents.add(freeze);
+
+        when(eventStore.loadEvents(WALLET_ID)).thenReturn(allEvents);
 
         assertThrows(InsufficientBalanceException.class,
                 () -> useCase.execute(WALLET_ID, new BigDecimal("5000")));
         verify(eventPublisher, never()).publish(any());
     }
 
-    private DomainWallet buildActiveWallet() {
-        DomainWallet w = new DomainWallet();
-        w.setId(WALLET_ID);
-        w.setCustomerId(CUSTOMER_ID);
-        w.setCurrency("XOF");
-        w.setBalance(new BigDecimal("10000"));
-        w.setFrozenAmount(BigDecimal.ZERO);
-        w.setStatus(WalletStatus.ACTIVE);
-        return w;
+    private List<WalletEventEntry> buildWalletWithBalance(BigDecimal balance) {
+        WalletEventEntry created = new WalletEventEntry();
+        created.setWalletId(WALLET_ID);
+        created.setEventType(WalletEventType.WALLET_CREATED);
+        created.setCustomerId(CUSTOMER_ID);
+        created.setWalletNumber("WLT-001");
+        created.setWalletType(WalletType.PERSONAL);
+        created.setCurrency("XOF");
+        created.setStatus(WalletStatus.ACTIVE);
+        created.setAggregateVersion(1L);
+        created.setOccurredAt(OffsetDateTime.now());
+
+        WalletEventEntry credit = new WalletEventEntry();
+        credit.setWalletId(WALLET_ID);
+        credit.setEventType(WalletEventType.WALLET_CREDITED);
+        credit.setAmount(balance);
+        credit.setAggregateVersion(2L);
+        credit.setOccurredAt(OffsetDateTime.now());
+
+        return List.of(created, credit);
     }
 }
