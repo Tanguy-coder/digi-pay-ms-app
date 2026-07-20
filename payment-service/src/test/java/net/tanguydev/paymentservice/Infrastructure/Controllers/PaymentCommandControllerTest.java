@@ -5,8 +5,6 @@ import net.tanguydev.paymentservice.Domain.Enums.PaymentStatus;
 import net.tanguydev.paymentservice.Domain.Enums.PaymentType;
 import net.tanguydev.paymentservice.Domain.Presenters.PaymentPresenterInterface;
 import net.tanguydev.paymentservice.Domain.Responses.PaymentResponse;
-import net.tanguydev.paymentservice.Domain.UseCases.FindPaymentByIdUseCaseInterface;
-import net.tanguydev.paymentservice.Domain.UseCases.FindPaymentsByWalletUseCaseInterface;
 import net.tanguydev.paymentservice.Domain.UseCases.InitiatePaymentUseCaseInterface;
 import net.tanguydev.paymentservice.Domain.Validations.Exception.DuplicatePaymentException;
 import net.tanguydev.paymentservice.Infrastructure.Mappers.PaymentMapper;
@@ -18,30 +16,25 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(PaymentController.class)
-class PaymentControllerTest {
+@WebMvcTest(PaymentCommandController.class)
+class PaymentCommandControllerTest {
 
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private InitiatePaymentUseCaseInterface initiate;
-    @MockitoBean private FindPaymentByIdUseCaseInterface findById;
-    @MockitoBean private FindPaymentsByWalletUseCaseInterface findByWallet;
     @MockitoBean private PaymentPresenterInterface presenter;
     @MockitoBean private PaymentMapper mapper;
 
     private static final UUID PAYMENT_ID  = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID SENDER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000010");
     private static final UUID RECEIVER_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
-    private static final UUID OTHER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     private static final String VALID_REQUEST = """
             {
@@ -98,41 +91,6 @@ class PaymentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_REQUEST))
                 .andExpect(status().isConflict());
-    }
-
-    @Test
-    void show_shouldReturn200_whenFound() throws Exception {
-        DomainPayment domain = buildDomain();
-        PaymentResponse response = buildResponse();
-
-        when(findById.execute(PAYMENT_ID)).thenReturn(Optional.of(domain));
-        when(presenter.present(any(DomainPayment.class))).thenReturn(response);
-
-        mockMvc.perform(get("/api/v1/payments/" + PAYMENT_ID))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(5000));
-    }
-
-    @Test
-    void show_shouldReturn404_whenNotFound() throws Exception {
-        when(findById.execute(OTHER_ID)).thenReturn(Optional.empty());
-
-        mockMvc.perform(get("/api/v1/payments/" + OTHER_ID))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void showByWallet_shouldReturn200WithList() throws Exception {
-        DomainPayment domain = buildDomain();
-        PaymentResponse response = buildResponse();
-
-        when(findByWallet.execute(SENDER_ID)).thenReturn(List.of(domain));
-        when(presenter.present(List.of(domain))).thenReturn(List.of(response));
-
-        mockMvc.perform(get("/api/v1/payments/wallet/" + SENDER_ID))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].currency").value("XOF"));
     }
 
     private DomainPayment buildDomain() {

@@ -8,8 +8,6 @@ import net.tanguydev.settlementservice.Domain.Ports.SettlementBatchRepositoryInt
 import net.tanguydev.settlementservice.Domain.Ports.SettlementEntryRepositoryInterface;
 import net.tanguydev.settlementservice.Domain.Presenters.BatchPresenterInterface;
 import net.tanguydev.settlementservice.Domain.Responses.BatchResponse;
-import net.tanguydev.settlementservice.Domain.UseCases.CloseBatchUseCaseInterface;
-import net.tanguydev.settlementservice.Domain.UseCases.OpenBatchUseCaseInterface;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -26,57 +24,17 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SettlementController.class)
-class SettlementControllerTest {
+@WebMvcTest(SettlementQueryController.class)
+class SettlementQueryControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @MockitoBean
-    private SettlementBatchRepositoryInterface batchRepository;
-
-    @MockitoBean
-    private SettlementEntryRepositoryInterface entryRepository;
-
-    @MockitoBean
-    private NetPositionRepositoryInterface positionRepository;
-
-    @MockitoBean
-    private BatchPresenterInterface presenter;
-
-    @MockitoBean
-    private OpenBatchUseCaseInterface openBatchUseCase;
-
-    @MockitoBean
-    private CloseBatchUseCaseInterface closeBatchUseCase;
-
-    private DomainSettlementBatch domainBatch(UUID id) {
-        DomainSettlementBatch batch = new DomainSettlementBatch();
-        batch.setId(id);
-        batch.setReference("BATCH-XAF-20260719-100000");
-        batch.setStatus(BatchStatus.COLLECTING);
-        batch.setCycle(SettlementCycle.HOURLY);
-        batch.setCurrency("XAF");
-        batch.setTotalEntries(3);
-        batch.setTotalAmount(new BigDecimal("15000"));
-        batch.setOpenedAt(OffsetDateTime.now());
-        return batch;
-    }
-
-    private BatchResponse batchResponse(UUID id) {
-        BatchResponse response = new BatchResponse();
-        response.setId(id);
-        response.setReference("BATCH-XAF-20260719-100000");
-        response.setStatus("COLLECTING");
-        response.setCycle("HOURLY");
-        response.setCurrency("XAF");
-        response.setTotalEntries(3);
-        response.setTotalAmount(new BigDecimal("15000"));
-        return response;
-    }
+    @MockitoBean private SettlementBatchRepositoryInterface batchRepository;
+    @MockitoBean private SettlementEntryRepositoryInterface entryRepository;
+    @MockitoBean private NetPositionRepositoryInterface positionRepository;
+    @MockitoBean private BatchPresenterInterface presenter;
 
     @Test
     void getAllBatches_returnsOk() throws Exception {
@@ -128,19 +86,28 @@ class SettlementControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    @Test
-    void openBatch_returnsCreated() throws Exception {
-        UUID id = UUID.randomUUID();
-        DomainSettlementBatch batch = domainBatch(id);
-        BatchResponse response = batchResponse(id);
+    private DomainSettlementBatch domainBatch(UUID id) {
+        DomainSettlementBatch batch = new DomainSettlementBatch();
+        batch.setId(id);
+        batch.setReference("BATCH-XAF-20260719-100000");
+        batch.setStatus(BatchStatus.COLLECTING);
+        batch.setCycle(SettlementCycle.HOURLY);
+        batch.setCurrency("XAF");
+        batch.setTotalEntries(3);
+        batch.setTotalAmount(new BigDecimal("15000"));
+        batch.setOpenedAt(OffsetDateTime.now());
+        return batch;
+    }
 
-        when(openBatchUseCase.execute(SettlementCycle.HOURLY, "XAF")).thenReturn(batch);
-        when(presenter.present(batch)).thenReturn(response);
-
-        mockMvc.perform(post("/api/settlements/batches/open")
-                        .param("cycle", "HOURLY")
-                        .param("currency", "XAF"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("BATCH-XAF-20260719-100000"));
+    private BatchResponse batchResponse(UUID id) {
+        BatchResponse response = new BatchResponse();
+        response.setId(id);
+        response.setReference("BATCH-XAF-20260719-100000");
+        response.setStatus("COLLECTING");
+        response.setCycle("HOURLY");
+        response.setCurrency("XAF");
+        response.setTotalEntries(3);
+        response.setTotalAmount(new BigDecimal("15000"));
+        return response;
     }
 }

@@ -11,13 +11,13 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/fraud-analyses")
-public class FraudController {
+public class FraudQueryController {
 
     private final FraudAnalysisRepositoryInterface repository;
     private final FraudAnalysisPresenterInterface presenter;
 
-    public FraudController(FraudAnalysisRepositoryInterface repository,
-                           FraudAnalysisPresenterInterface presenter) {
+    public FraudQueryController(FraudAnalysisRepositoryInterface repository,
+                                FraudAnalysisPresenterInterface presenter) {
         this.repository = repository;
         this.presenter = presenter;
     }

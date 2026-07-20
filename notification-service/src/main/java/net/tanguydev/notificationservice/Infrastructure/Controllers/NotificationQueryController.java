@@ -11,12 +11,13 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
-public class NotificationController {
+public class NotificationQueryController {
 
     private final NotificationRepositoryInterface repository;
     private final NotificationPresenterInterface presenter;
 
-    public NotificationController(NotificationRepositoryInterface repository, NotificationPresenterInterface presenter) {
+    public NotificationQueryController(NotificationRepositoryInterface repository,
+                                       NotificationPresenterInterface presenter) {
         this.repository = repository;
         this.presenter = presenter;
     }

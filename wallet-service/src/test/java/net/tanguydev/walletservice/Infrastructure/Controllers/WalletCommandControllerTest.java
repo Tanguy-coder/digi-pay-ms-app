@@ -15,33 +15,27 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(WalletController.class)
-class WalletControllerTest {
+@WebMvcTest(WalletCommandController.class)
+class WalletCommandControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
     @MockitoBean private CreateWalletUseCaseInterface create;
-    @MockitoBean private FindWalletByIdUseCaseInterface findById;
-    @MockitoBean private FindWalletByCustomerIdUseCaseInterface findByCustomerId;
     @MockitoBean private CreditWalletUseCaseInterface credit;
     @MockitoBean private DebitWalletUseCaseInterface debit;
     @MockitoBean private FreezeAmountUseCaseInterface freeze;
-    @MockitoBean private GetWalletHistoryUseCaseInterface getHistory;
     @MockitoBean private WalletPresenterInterface presenter;
     @MockitoBean private WalletMapper mapper;
 
     private static final UUID WALLET_ID   = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000100");
-    private static final UUID OTHER_ID    = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     @Test
     void store_shouldReturn201() throws Exception {
@@ -66,27 +60,6 @@ class WalletControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\": \"" + CUSTOMER_ID + "\", \"walletType\": \"PERSONAL\"}"))
                 .andExpect(status().isUnprocessableEntity());
-    }
-
-    @Test
-    void show_shouldReturn200() throws Exception {
-        DomainWallet domain = buildWallet();
-        WalletResponse response = buildResponse();
-
-        when(findById.execute(WALLET_ID)).thenReturn(Optional.of(domain));
-        when(presenter.present(any(DomainWallet.class))).thenReturn(response);
-
-        mockMvc.perform(get("/api/v1/wallets/" + WALLET_ID))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(10000));
-    }
-
-    @Test
-    void show_shouldReturn404_whenNotFound() throws Exception {
-        when(findById.execute(OTHER_ID)).thenReturn(Optional.empty());
-
-        mockMvc.perform(get("/api/v1/wallets/" + OTHER_ID))
-                .andExpect(status().isNotFound());
     }
 
     @Test

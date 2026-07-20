@@ -73,6 +73,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
 | **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
 | **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
+| **CQRS** | Command Query Responsibility Segregation : controllers separes en `CommandController` (POST/PUT, @Transactional) et `QueryController` (GET, read-only). Applique sur les 6 services metier. Separation stricte lecture/ecriture au niveau API. |
 | **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
@@ -168,7 +169,7 @@ service/
 └── Infrastructure/                  # Adaptateurs techniques
     ├── Config/                      # DomainConfig (beans use cases) + PresentationConfig (presenter)
     ├── Consumers/                   # Kafka consumers
-    ├── Controllers/                 # API REST
+    ├── Controllers/                 # API REST (CQRS : CommandController + QueryController)
     ├── EventStore/                  # Event Store PostgreSQL (append-only, table wallet_events)
     ├── Mappers/                     # MapStruct : Domain <-> JPA <-> Response
     ├── Models/                      # Entites JPA (projection / read model / OutboxEvent)
@@ -508,13 +509,13 @@ cd settlement-service    && ./mvnw test
 
 | Service | Tests | Couverture |
 |---|---|---|
-| customer-service | 19 | Use cases (create, find, update) + Integration controller |
-| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + Controller (7) + History (2) + Integration (1) |
-| payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
-| fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
-| notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
-| settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (OpenBatch, CloseBatch, CaptureEntry, CalculatePositions, ApplySettlement, CompleteBatch) (9) + Controller (5) + Consumer (4) + ApplicationContext (1) |
-| **Total** | **139** | |
+| customer-service | 18 | Use cases (create, find, update) + CommandController (2) + QueryController (2) + Integration (1) |
+| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + CommandController (5) + QueryController (2) + History (2) + Integration (1) |
+| payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + CommandController (3) + QueryController (3) + Integration (1) |
+| fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
+| notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
+| settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
+| **Total** | **138** | |
 
 ## Roadmap
 
@@ -529,7 +530,8 @@ cd settlement-service    && ./mvnw test
 | Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Termine |
 | Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
 | Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
-| Phase 10 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 10 | CQRS (controllers Command/Query separes, 6 services) | Termine |
+| Phase 11 | Observabilite (Prometheus + Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 
