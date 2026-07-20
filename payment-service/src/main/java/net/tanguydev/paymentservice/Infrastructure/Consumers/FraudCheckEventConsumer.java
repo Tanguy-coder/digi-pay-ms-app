@@ -3,6 +3,7 @@ package net.tanguydev.paymentservice.Infrastructure.Consumers;
 import net.tanguydev.paymentservice.Domain.UseCases.PaymentSagaOrchestratorInterface;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
@@ -21,6 +22,7 @@ public class FraudCheckEventConsumer {
     }
 
     @KafkaListener(topics = "fraud-check-events", groupId = "payment-fraud-group")
+    @Transactional
     public void consume(Map<String, Object> message) {
         String eventType = (String) message.get("eventType");
         UUID paymentId = UUID.fromString((String) message.get("paymentId"));

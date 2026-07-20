@@ -1,22 +1,40 @@
 package net.tanguydev.walletservice.Infrastructure.Adapters;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.tanguydev.walletservice.Domain.Events.WalletEvent;
 import net.tanguydev.walletservice.Domain.Ports.WalletEventPublisherInterface;
-import org.springframework.kafka.core.KafkaTemplate;
+import net.tanguydev.walletservice.Infrastructure.Models.OutboxEvent;
+import net.tanguydev.walletservice.Infrastructure.Repositories.OutboxEventJpaRepository;
 import org.springframework.stereotype.Component;
 
 @Component
 public class WalletEventPublisher implements WalletEventPublisherInterface {
 
     private static final String TOPIC = "wallet-events";
-    private final KafkaTemplate<String, WalletEvent> kafkaTemplate;
 
-    public WalletEventPublisher(KafkaTemplate<String, WalletEvent> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    private final OutboxEventJpaRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+
+    public WalletEventPublisher(OutboxEventJpaRepository outboxRepository,
+                                ObjectMapper objectMapper) {
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     public void publish(WalletEvent event) {
-        kafkaTemplate.send(TOPIC, String.valueOf(event.getWalletId()), event);
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            OutboxEvent outbox = new OutboxEvent(
+                    "Wallet",
+                    event.getWalletId(),
+                    event.getEventType(),
+                    TOPIC,
+                    payload
+            );
+            outboxRepository.save(outbox);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize wallet event for outbox", e);
+        }
     }
 }
