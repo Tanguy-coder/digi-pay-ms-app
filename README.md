@@ -73,6 +73,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
 | **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
 | **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
+| **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
 ### Saga Pattern — Flux de transfert P2P avec detection fraude
@@ -146,7 +147,7 @@ Settlement MS
 | Conteneurisation | Docker + Docker Compose |
 | Service Discovery | Spring Cloud Netflix Eureka |
 | API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
-| Observabilite | Prometheus + Zipkin (prevu Phase 7) |
+| Observabilite | Prometheus + Zipkin (prevu Phase 10) |
 
 ## Architecture logicielle (par service)
 
@@ -170,9 +171,10 @@ service/
     ├── Controllers/                 # API REST
     ├── EventStore/                  # Event Store PostgreSQL (append-only, table wallet_events)
     ├── Mappers/                     # MapStruct : Domain <-> JPA <-> Response
-    ├── Models/                      # Entites JPA (projection / read model)
+    ├── Models/                      # Entites JPA (projection / read model / OutboxEvent)
     ├── Presenters/                  # Implementation des interfaces presenter
-    └── Repositories/                # JpaRepository + adaptateur hexagonal
+    ├── Repositories/                # JpaRepository + adaptateur hexagonal
+    └── Schedulers/                  # OutboxRelay (polling 1s) + BatchScheduler (settlement)
 ```
 
 ## Structure du repository
@@ -526,12 +528,13 @@ cd settlement-service    && ./mvnw test
 | Phase 6 | Settlement MS v1 (compensation simple, position nette) | Termine |
 | Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Termine |
 | Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
-| Phase 9 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
+| Phase 10 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 
 - Exactly-Once Semantics Kafka (`isolation.level = read_committed`)
-- Outbox Pattern avec Debezium (CDC pour garantie transactionnelle DB → Kafka)
+- Migration Outbox relay → Debezium CDC (capture WAL PostgreSQL, zero polling)
 - GDPR Compliance (chiffrement PII, droit a l'oubli dans les topics)
 - gRPC entre services (queries synchrones haute-performance)
 - Kubernetes (Helm charts, HPA, PodDisruptionBudget)
