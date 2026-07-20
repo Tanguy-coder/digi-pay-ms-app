@@ -1,7 +1,9 @@
 package net.tanguydev.settlementservice.Infrastructure.Consumers;
 
-import net.tanguydev.settlementservice.Domain.UseCases.ProcessPaymentSettlementCommand;
-import net.tanguydev.settlementservice.Domain.UseCases.ProcessPaymentSettlementUseCaseInterface;
+import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryCommand;
+import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryUseCaseInterface;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -12,10 +14,12 @@ import java.util.UUID;
 @Component
 public class PaymentEventConsumer {
 
-    private final ProcessPaymentSettlementUseCaseInterface processSettlement;
+    private static final Logger log = LoggerFactory.getLogger(PaymentEventConsumer.class);
 
-    public PaymentEventConsumer(ProcessPaymentSettlementUseCaseInterface processSettlement) {
-        this.processSettlement = processSettlement;
+    private final CaptureEntryUseCaseInterface captureEntry;
+
+    public PaymentEventConsumer(CaptureEntryUseCaseInterface captureEntry) {
+        this.captureEntry = captureEntry;
     }
 
     @KafkaListener(topics = "payment-events", groupId = "settlement-group")
@@ -23,7 +27,7 @@ public class PaymentEventConsumer {
         String eventType = (String) message.get("eventType");
         if (!"payment.completed".equals(eventType)) return;
 
-        ProcessPaymentSettlementCommand command = new ProcessPaymentSettlementCommand();
+        CaptureEntryCommand command = new CaptureEntryCommand();
         command.setPaymentId(UUID.fromString((String) message.get("paymentId")));
         command.setPaymentReference((String) message.get("paymentReference"));
         command.setSenderWalletId(UUID.fromString((String) message.get("senderWalletId")));
@@ -35,6 +39,10 @@ public class PaymentEventConsumer {
 
         command.setCurrency((String) message.get("currency"));
 
-        processSettlement.execute(command);
+        try {
+            captureEntry.execute(command);
+        } catch (Exception e) {
+            log.error("Failed to capture settlement entry for payment {}: {}", command.getPaymentId(), e.getMessage());
+        }
     }
 }

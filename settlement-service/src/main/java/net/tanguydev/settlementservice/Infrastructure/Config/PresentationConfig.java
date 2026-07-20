@@ -1,8 +1,7 @@
 package net.tanguydev.settlementservice.Infrastructure.Config;
 
-import net.tanguydev.settlementservice.Domain.Presenters.SettlementPresenterInterface;
-import net.tanguydev.settlementservice.Infrastructure.Presenters.SettlementPresenter;
-import net.tanguydev.settlementservice.Infrastructure.Mappers.SettlementMapper;
+import net.tanguydev.settlementservice.Domain.Presenters.BatchPresenterInterface;
+import net.tanguydev.settlementservice.Infrastructure.Presenters.BatchPresenter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -10,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 public class PresentationConfig {
 
     @Bean
-    public SettlementPresenterInterface settlementPresenter(SettlementMapper mapper) {
-        return new SettlementPresenter(mapper);
+    public BatchPresenterInterface batchPresenter() {
+        return new BatchPresenter();
     }
 }

@@ -1,6 +1,6 @@
 package net.tanguydev.settlementservice.Infrastructure.Producers;
 
-import net.tanguydev.settlementservice.Domain.Entities.DomainSettlement;
+import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementBatch;
 import net.tanguydev.settlementservice.Domain.Ports.SettlementEventPublisherInterface;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -20,27 +20,26 @@ public class SettlementEventPublisher implements SettlementEventPublisherInterfa
     }
 
     @Override
-    public void publishSettlementCompleted(DomainSettlement settlement) {
+    public void publishBatchCompleted(DomainSettlementBatch batch) {
         Map<String, Object> event = new HashMap<>();
-        event.put("eventType", "settlement.completed");
-        event.put("settlementId", settlement.getId().toString());
-        event.put("reference", settlement.getReference());
-        event.put("status", settlement.getStatus().name());
-        event.put("totalPayments", settlement.getTotalPayments());
-        event.put("totalAmount", settlement.getTotalAmount().toPlainString());
-        event.put("netPosition", settlement.getNetPosition().toPlainString());
-        event.put("currency", settlement.getCurrency());
-        event.put("settledAt", settlement.getSettledAt().toString());
-        kafkaTemplate.send(TOPIC, settlement.getId().toString(), event);
+        event.put("eventType", "batch.completed");
+        event.put("batchId", batch.getId().toString());
+        event.put("reference", batch.getReference());
+        event.put("status", batch.getStatus().name());
+        event.put("totalEntries", batch.getTotalEntries());
+        event.put("totalAmount", batch.getTotalAmount().toPlainString());
+        event.put("currency", batch.getCurrency());
+        event.put("settledAt", batch.getSettledAt().toString());
+        kafkaTemplate.send(TOPIC, batch.getId().toString(), event);
     }
 
     @Override
-    public void publishSettlementFailed(DomainSettlement settlement, String reason) {
+    public void publishBatchFailed(DomainSettlementBatch batch, String reason) {
         Map<String, Object> event = new HashMap<>();
-        event.put("eventType", "settlement.failed");
-        event.put("settlementId", settlement.getId().toString());
-        event.put("reference", settlement.getReference());
+        event.put("eventType", "batch.failed");
+        event.put("batchId", batch.getId().toString());
+        event.put("reference", batch.getReference());
         event.put("reason", reason);
-        kafkaTemplate.send(TOPIC, settlement.getId().toString(), event);
+        kafkaTemplate.send(TOPIC, batch.getId().toString(), event);
     }
 }

@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SettlementEntryRepositoryInterface {
+
     DomainSettlementEntry save(DomainSettlementEntry entry);
-    List<DomainSettlementEntry> findBySettlementId(UUID settlementId);
+
+    List<DomainSettlementEntry> findByBatchId(UUID batchId);
+
     boolean existsByPaymentId(UUID paymentId);
 }

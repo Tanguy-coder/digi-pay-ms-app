@@ -1,38 +1,19 @@
-package net.tanguydev.settlementservice.Domain.Entities;
+package net.tanguydev.settlementservice.Domain.UseCases;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public class DomainSettlementEntry {
+public class CaptureEntryCommand {
 
-    private UUID id;
-    private UUID batchId;
     private UUID paymentId;
     private String paymentReference;
     private UUID senderWalletId;
     private UUID receiverWalletId;
     private BigDecimal amount;
+    private BigDecimal feeAmount;
     private String currency;
-    private OffsetDateTime capturedAt;
 
-    public DomainSettlementEntry() {
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public UUID getBatchId() {
-        return batchId;
-    }
-
-    public void setBatchId(UUID batchId) {
-        this.batchId = batchId;
+    public CaptureEntryCommand() {
     }
 
     public UUID getPaymentId() {
@@ -75,19 +56,19 @@ public class DomainSettlementEntry {
         this.amount = amount;
     }
 
+    public BigDecimal getFeeAmount() {
+        return feeAmount;
+    }
+
+    public void setFeeAmount(BigDecimal feeAmount) {
+        this.feeAmount = feeAmount;
+    }
+
     public String getCurrency() {
         return currency;
     }
 
     public void setCurrency(String currency) {
         this.currency = currency;
-    }
-
-    public OffsetDateTime getCapturedAt() {
-        return capturedAt;
-    }
-
-    public void setCapturedAt(OffsetDateTime capturedAt) {
-        this.capturedAt = capturedAt;
     }
 }

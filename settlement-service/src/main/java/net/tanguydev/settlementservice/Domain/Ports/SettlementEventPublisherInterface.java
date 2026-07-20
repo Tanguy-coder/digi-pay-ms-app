@@ -1,8 +1,10 @@
 package net.tanguydev.settlementservice.Domain.Ports;
 
-import net.tanguydev.settlementservice.Domain.Entities.DomainSettlement;
+import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementBatch;
 
 public interface SettlementEventPublisherInterface {
-    void publishSettlementCompleted(DomainSettlement settlement);
-    void publishSettlementFailed(DomainSettlement settlement, String reason);
+
+    void publishBatchCompleted(DomainSettlementBatch batch);
+
+    void publishBatchFailed(DomainSettlementBatch batch, String reason);
 }

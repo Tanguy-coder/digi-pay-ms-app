@@ -49,7 +49,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | reponses Saga wallet · `fraud-check-events` |
 | **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
 | **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
-| **Settlement MS** | 8087 | Compensation interbancaire · Position nette · Idempotency par paymentId | `settlement.completed` `settlement.failed` | `payment.completed` |
+| **Settlement MS** | 8087 | Compensation multilaterale · Batches horaires · Net positions · Event Sourcing | `settlement.completed` `settlement.failed` | `payment.completed` |
 
 ## Configuration Kafka
 
@@ -67,7 +67,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 
 | Pattern | Application dans ce projet |
 |---|---|
-| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Le solde n'est jamais modifie directement — il est calcule en rejouant WALLET_CREATED → WALLET_CREDITED → WALLET_DEBITED → AMOUNT_FROZEN. Endpoint `/history` pour consulter toutes les operations. |
+| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Settlement MS : l'etat du batch est reconstruit depuis les evenements (`batch_events`). Le solde/statut n'est jamais modifie directement — il est calcule en rejouant les events. |
 | **Saga (Orchestration)** | Payment MS orchestrate DEBIT → FRAUD_CHECK → CREDIT → COMPLETE; compensation automatique si une etape echoue |
 | **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
@@ -114,8 +114,8 @@ Notification MS
 Settlement MS
   10. Recoit payment.completed sur payment-events (group: settlement-group)
   11. Verifie idempotency (paymentId deja traite → skip)
-  12. Cree un settlement (status PROCESSING) + 2 entries (DEBIT sender, CREDIT receiver)
-  13. Calcule la position nette, passe en COMPLETED
+  12. Capture l'entry dans le batch ouvert (Event Sourcing)
+  13. Scheduler horaire : close batch → calculate net positions → apply settlement → complete
   14. Publie settlement.completed sur settlement-events
 ```
 
@@ -303,10 +303,10 @@ chmod +x e2e-settlement.sh && ./e2e-settlement.sh
 ```
 
 Scenarios couverts :
-- **Scenario 1** : paiement completed → settlement cree avec status `COMPLETED`
-- **Scenario 2** : consultation settlement par ID
-- **Scenario 3** : second paiement → second settlement
-- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon settlement
+- **Scenario 1** : paiement completed → entry capturee dans le batch ouvert
+- **Scenario 2** : consultation du batch courant + entries + positions nettes
+- **Scenario 3** : fermeture manuelle du batch → calcul positions
+- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon entry
 
 ### Scenarios de test valides
 
@@ -381,8 +381,13 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 
 | Methode | URL | Description |
 |---|---|---|
-| GET | `/api/settlements` | Lister tous les settlements |
-| GET | `/api/settlements/{id}` | Consulter un settlement par UUID |
+| GET | `/api/settlements/batches` | Lister tous les batches |
+| GET | `/api/settlements/batches/current?currency=XAF` | Batch ouvert en cours |
+| GET | `/api/settlements/batches/{id}` | Consulter un batch par UUID |
+| GET | `/api/settlements/batches/{id}/entries` | Entries (paiements captures) du batch |
+| GET | `/api/settlements/batches/{id}/positions` | Positions nettes du batch |
+| POST | `/api/settlements/batches/open` | Ouvrir un batch manuellement |
+| POST | `/api/settlements/batches/{id}/close` | Fermer un batch manuellement |
 
 ### Discovery & Gateway
 
@@ -405,7 +410,7 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Payment H2 Console | http://localhost:8084/h2-console |
 | Fraud H2 Console | http://localhost:8085/h2-console |
 | Notification H2 Console | http://localhost:8086/h2-console |
-| Settlement API | http://localhost:8087/api/settlements |
+| Settlement API | http://localhost:8087/api/settlements/batches |
 | Settlement H2 Console | http://localhost:8087/h2-console |
 | Eureka Dashboard | http://localhost:8761 |
 | Gateway | http://localhost:8888 |
@@ -467,12 +472,18 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
                                              │   Settlement Service     │
                                              │      (port 8087)         │
                                              │                          │
+                                             │  EVENT SOURCING          │
+                                             │  batch_events            │
+                                             │  (append-only)           │
+                                             │                          │
                                              │  Consomme:               │
                                              │  - payment.completed     │
+                                             │    → capture entry       │
                                              │                          │
-                                             │  Cree settlement +       │
-                                             │  2 entries (DEBIT/CREDIT)│
-                                             │  Idempotency paymentId   │
+                                             │  Scheduler horaire:      │
+                                             │  close → calculate net   │
+                                             │  positions → apply →     │
+                                             │  complete batch          │
                                              │                          │
                                              │  Publie:                 │
                                              │  - settlement.completed  │
@@ -500,8 +511,8 @@ cd settlement-service    && ./mvnw test
 | payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
-| settlement-service | 14 | ProcessPaymentSettlementUseCase (5) + SettlementController (4) + PaymentEventConsumer (4) + ApplicationContext (1) |
-| **Total** | **124** | |
+| settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (OpenBatch, CloseBatch, CaptureEntry, CalculatePositions, ApplySettlement, CompleteBatch) (9) + Controller (5) + Consumer (4) + ApplicationContext (1) |
+| **Total** | **139** | |
 
 ## Roadmap
 
@@ -512,9 +523,10 @@ cd settlement-service    && ./mvnw test
 | Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + Tests E2E | Termine |
 | Phase 4 | Fraud Detection MS + Notification MS | Termine |
 | Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Termine |
-| Phase 6 | Settlement MS (compensation interbancaire, position nette, 14 tests) | Termine |
-| Phase 7 | Event Sourcing (Wallet MS) + CI/CD GitLab | Termine |
-| Phase 8 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 6 | Settlement MS v1 (compensation simple, position nette) | Termine |
+| Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Termine |
+| Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
+| Phase 9 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 

@@ -1,13 +1,12 @@
-package net.tanguydev.settlementservice.Domain.Entities;
+package net.tanguydev.settlementservice.Domain.Responses;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public class DomainSettlementEntry {
+public class EntryResponse {
 
     private UUID id;
-    private UUID batchId;
     private UUID paymentId;
     private String paymentReference;
     private UUID senderWalletId;
@@ -16,23 +15,12 @@ public class DomainSettlementEntry {
     private String currency;
     private OffsetDateTime capturedAt;
 
-    public DomainSettlementEntry() {
-    }
-
     public UUID getId() {
         return id;
     }
 
     public void setId(UUID id) {
         this.id = id;
-    }
-
-    public UUID getBatchId() {
-        return batchId;
-    }
-
-    public void setBatchId(UUID batchId) {
-        this.batchId = batchId;
     }
 
     public UUID getPaymentId() {
