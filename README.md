@@ -11,8 +11,8 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Domaine** | Fintech / Banking / Paiement electronique |
 | **Type** | Projet personnel — Portfolio technique senior |
 | **Niveau** | Senior / Expert |
-| **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Docker |
-| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD |
+| **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
+| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT |
 
 **References metier** : Visa/Mastercard (clearing), Flutterwave/Paystack (paiements Afrique), Stripe (APIs), CinetPay/Wave (mobile money).
 
@@ -29,7 +29,9 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 ## Architecture generale
 
 ```
-                        [ API Gateway ]
+                       [ Keycloak ]
+                            │ JWT (RS256)
+                        [ API Gateway ]  ← OAuth2 Resource Server
                               |
        [ Customer MS ] [ Wallet MS ] [ Payment MS ]
              |               |              |
@@ -74,6 +76,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
 | **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
 | **CQRS** | Command Query Responsibility Segregation : controllers separes en `CommandController` (POST/PUT, @Transactional) et `QueryController` (GET, read-only). Applique sur les 6 services metier. Separation stricte lecture/ecriture au niveau API. |
+| **OAuth2 / JWT** | Securite centralisee via Keycloak (Identity Provider) et Spring Security OAuth2 Resource Server au niveau du gateway. Validation JWT (RS256) a l'entree, extraction des roles Keycloak (`realm_access.roles`) via converter custom. Les microservices en aval n'ont pas de security — ils font confiance au gateway (zero-trust perimetrique). |
 | **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
@@ -148,7 +151,8 @@ Settlement MS
 | Conteneurisation | Docker + Docker Compose |
 | Service Discovery | Spring Cloud Netflix Eureka |
 | API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
-| Observabilite | Prometheus + Zipkin (prevu Phase 10) |
+| Securite | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
+| Observabilite | Prometheus + Zipkin (prevu Phase 12) |
 
 ## Architecture logicielle (par service)
 
@@ -190,7 +194,8 @@ digi-pay-ms-app/
 ├── settlement-service/       → Settlement MS   (port 8087)
 ├── discovery-service/        → Eureka Server   (port 8761)
 ├── gateway-service/          → API Gateway     (port 8888)
-├── docker-compose.yaml       → Kafka + Redis + 7 services applicatifs
+├── keycloak/                 → Realm export (auto-import au boot)
+├── docker-compose.yaml       → Keycloak + Kafka + Redis + 8 services applicatifs
 ├── e2e-fraud.sh              → Scenarios E2E fraud detection
 ├── e2e-settlement.sh         → Scenarios E2E settlement
 ├── e2e-gateway.sh            → Scenarios E2E gateway routing
@@ -212,11 +217,32 @@ digi-pay-ms-app/
 docker compose up --build -d
 ```
 
+### Obtenir un token JWT (Keycloak)
+
+```bash
+# Obtenir un token pour l'utilisateur user1 (role USER)
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/digipay/protocol/openid-connect/token \
+  -d "grant_type=password" \
+  -d "client_id=digipay-gateway" \
+  -d "client_secret=digipay-gateway-secret" \
+  -d "username=user1" \
+  -d "password=password" | jq -r '.access_token')
+
+# Appeler un service via le gateway avec le token
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8888/customer-service/api/v1/customers
+```
+
+Utilisateurs pre-configures :
+| Username | Password | Roles |
+|---|---|---|
+| `user1` | `password` | USER |
+| `admin1` | `password` | USER, ADMIN |
+
 ### Demarrage local (developpement)
 
 ```bash
 # 1. Infrastructure
-docker compose up kafka redis -d
+docker compose up kafka redis keycloak keycloak-db -d
 
 # 2. Discovery + Gateway
 cd discovery-service && ./mvnw spring-boot:run
@@ -392,12 +418,13 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | POST | `/api/settlements/batches/open` | Ouvrir un batch manuellement |
 | POST | `/api/settlements/batches/{id}/close` | Fermer un batch manuellement |
 
-### Discovery & Gateway
+### Discovery, Gateway & Security
 
 | Service | Port | Description |
 |---|---|---|
 | Eureka Server | 8761 | Service registry (dashboard: http://localhost:8761) |
-| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka |
+| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka, validation JWT |
+| Keycloak | 8080 | Identity Provider (OIDC), realm `digipay`, roles USER/ADMIN |
 
 ### URLs utiles
 
@@ -417,6 +444,8 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Settlement H2 Console | http://localhost:8087/h2-console |
 | Eureka Dashboard | http://localhost:8761 |
 | Gateway | http://localhost:8888 |
+| Keycloak Admin Console | http://localhost:8080 (admin / admin) |
+| Keycloak Token Endpoint | http://localhost:8080/realms/digipay/protocol/openid-connect/token |
 
 ## Communication Kafka entre services
 
@@ -515,7 +544,8 @@ cd settlement-service    && ./mvnw test
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
 | settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
-| **Total** | **138** | |
+| gateway-service | 5 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) |
+| **Total** | **143** | |
 
 ## Roadmap
 
@@ -531,7 +561,8 @@ cd settlement-service    && ./mvnw test
 | Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
 | Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
 | Phase 10 | CQRS (controllers Command/Query separes, 6 services) | Termine |
-| Phase 11 | Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 11 | Securite JWT/Keycloak via API Gateway (OAuth2 Resource Server, realm auto-import, 5 tests) | Termine |
+| Phase 12 | Observabilite (Prometheus + Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 
