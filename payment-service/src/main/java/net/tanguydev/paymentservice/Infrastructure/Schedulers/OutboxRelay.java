@@ -5,7 +5,6 @@ import net.tanguydev.paymentservice.Infrastructure.Models.OutboxEvent;
 import net.tanguydev.paymentservice.Infrastructure.Repositories.OutboxEventJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,14 +18,14 @@ public class OutboxRelay {
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
 
     private final OutboxEventJpaRepository outboxRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaCircuitBreakerPublisher kafkaPublisher;
     private final ObjectMapper objectMapper;
 
     public OutboxRelay(OutboxEventJpaRepository outboxRepository,
-                       KafkaTemplate<String, Object> kafkaTemplate,
+                       KafkaCircuitBreakerPublisher kafkaPublisher,
                        ObjectMapper objectMapper) {
         this.outboxRepository = outboxRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.kafkaPublisher = kafkaPublisher;
         this.objectMapper = objectMapper;
     }
 
@@ -37,7 +36,7 @@ public class OutboxRelay {
         for (OutboxEvent event : events) {
             try {
                 Object payload = objectMapper.readValue(event.getPayload(), Object.class);
-                kafkaTemplate.send(event.getKafkaTopic(), event.getAggregateId().toString(), payload).get();
+                kafkaPublisher.send(event.getKafkaTopic(), event.getAggregateId().toString(), payload);
                 event.setPublished(true);
                 event.setPublishedAt(OffsetDateTime.now());
                 outboxRepository.save(event);

@@ -12,7 +12,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Type** | Projet personnel — Portfolio technique senior |
 | **Niveau** | Senior / Expert |
 | **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
-| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT |
+| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker |
 
 **References metier** : Visa/Mastercard (clearing), Flutterwave/Paystack (paiements Afrique), Stripe (APIs), CinetPay/Wave (mobile money).
 
@@ -78,6 +78,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **CQRS** | Command Query Responsibility Segregation : controllers separes en `CommandController` (POST/PUT, @Transactional) et `QueryController` (GET, read-only). Applique sur les 6 services metier. Separation stricte lecture/ecriture au niveau API. |
 | **OAuth2 / JWT** | Securite centralisee via Keycloak (Identity Provider) et Spring Security OAuth2 Resource Server au niveau du gateway. Validation JWT (RS256) a l'entree, extraction des roles Keycloak (`realm_access.roles`) via converter custom. Les microservices en aval n'ont pas de security — ils font confiance au gateway (zero-trust perimetrique). |
 | **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
+| **Circuit Breaker / Retry** | Resilience4j sur le `OutboxRelay` du payment-service : Retry (3 tentatives, 500ms) + Circuit Breaker (CLOSED/OPEN/HALF-OPEN). Si Kafka est indisponible, le circuit s'ouvre apres 50% d'echecs sur 10 appels, et l'event reste dans l'outbox pour etre rejoue. Protege contre les cascades de pannes. |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
 ### Saga Pattern — Flux de transfert P2P avec detection fraude
@@ -152,7 +153,8 @@ Settlement MS
 | Service Discovery | Spring Cloud Netflix Eureka |
 | API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
 | Securite | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
-| Observabilite | Prometheus + Zipkin (prevu Phase 12) |
+| Observabilite | Prometheus · Grafana · Micrometer (metriques temps reel) |
+| Resilience | Resilience4j (Circuit Breaker + Retry sur publication Kafka) |
 
 ## Architecture logicielle (par service)
 
@@ -446,6 +448,8 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Gateway | http://localhost:8888 |
 | Keycloak Admin Console | http://localhost:8080 (admin / admin) |
 | Keycloak Token Endpoint | http://localhost:8080/realms/digipay/protocol/openid-connect/token |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 (admin / admin) |
 
 ## Communication Kafka entre services
 
@@ -540,12 +544,12 @@ cd settlement-service    && ./mvnw test
 |---|---|---|
 | customer-service | 18 | Use cases (create, find, update) + CommandController (2) + QueryController (2) + Integration (1) |
 | wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + CommandController (5) + QueryController (2) + History (2) + Integration (1) |
-| payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + CommandController (3) + QueryController (3) + Integration (1) |
+| payment-service | 24 | Use cases (3) + Saga (7) + Find (4) + CommandController (3) + QueryController (3) + CircuitBreaker (3) + Integration (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
 | settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
 | gateway-service | 5 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) |
-| **Total** | **143** | |
+| **Total** | **146** | |
 
 ## Roadmap
 
@@ -562,7 +566,9 @@ cd settlement-service    && ./mvnw test
 | Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
 | Phase 10 | CQRS (controllers Command/Query separes, 6 services) | Termine |
 | Phase 11 | Securite JWT/Keycloak via API Gateway (OAuth2 Resource Server, realm auto-import, 5 tests) | Termine |
-| Phase 12 | Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 12a | Observabilite : Prometheus + Grafana (metriques temps reel, 8 services scraped, dashboards) | Termine |
+| Phase 12b | Resilience : Circuit Breaker + Retry Resilience4j sur OutboxRelay (3 tests) | Termine |
+| Phase 12c | Tracing distribue (Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 
