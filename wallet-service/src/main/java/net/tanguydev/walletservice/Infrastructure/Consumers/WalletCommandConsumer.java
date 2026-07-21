@@ -1,21 +1,19 @@
 package net.tanguydev.walletservice.Infrastructure.Consumers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.tanguydev.walletservice.Domain.UseCases.CreditWalletUseCaseInterface;
 import net.tanguydev.walletservice.Domain.UseCases.DebitWalletUseCaseInterface;
+import net.tanguydev.walletservice.Infrastructure.Models.OutboxEvent;
+import net.tanguydev.walletservice.Infrastructure.Repositories.OutboxEventJpaRepository;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Reçoit les commandes Saga du payment-service (topic: wallet-commands).
- * Exécute l'opération demandée (DEBIT / CREDIT / COMPENSATE_DEBIT)
- * puis répond sur le topic wallet-saga-events avec succès ou échec.
- */
 @Component
 public class WalletCommandConsumer {
 
@@ -23,17 +21,21 @@ public class WalletCommandConsumer {
 
     private final DebitWalletUseCaseInterface debitWallet;
     private final CreditWalletUseCaseInterface creditWallet;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxEventJpaRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     public WalletCommandConsumer(DebitWalletUseCaseInterface debitWallet,
                                  CreditWalletUseCaseInterface creditWallet,
-                                 KafkaTemplate<String, Object> kafkaTemplate) {
+                                 OutboxEventJpaRepository outboxRepository,
+                                 ObjectMapper objectMapper) {
         this.debitWallet = debitWallet;
         this.creditWallet = creditWallet;
-        this.kafkaTemplate = kafkaTemplate;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     @KafkaListener(topics = "wallet-commands", groupId = "wallet-saga-group")
+    @Transactional
     public void consume(Map<String, Object> message) {
         String commandType = (String) message.get("commandType");
         UUID paymentId = UUID.fromString((String) message.get("paymentId"));
@@ -47,8 +49,6 @@ public class WalletCommandConsumer {
             default -> {}
         }
     }
-
-    // ── handlers ──────────────────────────────────────────────────────────────
 
     private void handleDebit(UUID paymentId, UUID walletId, BigDecimal amount) {
         try {
@@ -78,10 +78,23 @@ public class WalletCommandConsumer {
     }
 
     private void reply(UUID paymentId, String eventType, String reason) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("eventType", eventType);
-        response.put("paymentId", paymentId.toString());
-        if (reason != null) response.put("reason", reason);
-        kafkaTemplate.send(SAGA_REPLY_TOPIC, paymentId.toString(), response);
+        try {
+            Map<String, Object> response = new HashMap<>();
+            response.put("eventType", eventType);
+            response.put("paymentId", paymentId.toString());
+            if (reason != null) response.put("reason", reason);
+
+            String payload = objectMapper.writeValueAsString(response);
+            OutboxEvent outbox = new OutboxEvent(
+                    "WalletSaga",
+                    paymentId,
+                    eventType,
+                    SAGA_REPLY_TOPIC,
+                    payload
+            );
+            outboxRepository.save(outbox);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize saga reply for outbox", e);
+        }
     }
 }

@@ -56,4 +56,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+settlement:
+  batch:
+    cron: "0 0 * * * *"
+    currencies: XAF

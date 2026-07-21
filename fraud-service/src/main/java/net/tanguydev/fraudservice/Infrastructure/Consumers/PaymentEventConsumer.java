@@ -4,6 +4,7 @@ import net.tanguydev.fraudservice.Domain.UseCases.AnalyzePaymentCommand;
 import net.tanguydev.fraudservice.Domain.UseCases.AnalyzePaymentUseCaseInterface;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -22,6 +23,7 @@ public class PaymentEventConsumer {
     }
 
     @KafkaListener(topics = "payment-events", groupId = "fraud-group")
+    @Transactional
     public void consume(Map<String, Object> message) {
         String eventType = (String) message.get("eventType");
         if (!"payment.initiated".equals(eventType)) return;

@@ -1,7 +1,7 @@
 package net.tanguydev.settlementservice.Infrastructure.Consumers;
 
-import net.tanguydev.settlementservice.Domain.UseCases.ProcessPaymentSettlementCommand;
-import net.tanguydev.settlementservice.Domain.UseCases.ProcessPaymentSettlementUseCaseInterface;
+import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryCommand;
+import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryUseCaseInterface;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,13 +21,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PaymentEventConsumerTest {
 
-    @Mock private ProcessPaymentSettlementUseCaseInterface processSettlement;
+    @Mock
+    private CaptureEntryUseCaseInterface captureEntry;
 
     private PaymentEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new PaymentEventConsumer(processSettlement);
+        consumer = new PaymentEventConsumer(captureEntry);
     }
 
     private Map<String, Object> paymentCompletedEvent() {
@@ -49,11 +50,10 @@ class PaymentEventConsumerTest {
 
         consumer.consume(event);
 
-        ArgumentCaptor<ProcessPaymentSettlementCommand> captor =
-                ArgumentCaptor.forClass(ProcessPaymentSettlementCommand.class);
-        verify(processSettlement).execute(captor.capture());
+        ArgumentCaptor<CaptureEntryCommand> captor = ArgumentCaptor.forClass(CaptureEntryCommand.class);
+        verify(captureEntry).execute(captor.capture());
 
-        ProcessPaymentSettlementCommand cmd = captor.getValue();
+        CaptureEntryCommand cmd = captor.getValue();
         assertThat(cmd.getPaymentReference()).isEqualTo("PAY-REF-001");
         assertThat(cmd.getAmount()).isEqualByComparingTo("5000.00");
         assertThat(cmd.getFeeAmount()).isEqualByComparingTo("50.00");
@@ -67,7 +67,7 @@ class PaymentEventConsumerTest {
 
         consumer.consume(event);
 
-        verify(processSettlement, never()).execute(any());
+        verify(captureEntry, never()).execute(any());
     }
 
     @Test
@@ -77,7 +77,7 @@ class PaymentEventConsumerTest {
 
         consumer.consume(event);
 
-        verify(processSettlement, never()).execute(any());
+        verify(captureEntry, never()).execute(any());
     }
 
     @Test
@@ -87,9 +87,8 @@ class PaymentEventConsumerTest {
 
         consumer.consume(event);
 
-        ArgumentCaptor<ProcessPaymentSettlementCommand> captor =
-                ArgumentCaptor.forClass(ProcessPaymentSettlementCommand.class);
-        verify(processSettlement).execute(captor.capture());
+        ArgumentCaptor<CaptureEntryCommand> captor = ArgumentCaptor.forClass(CaptureEntryCommand.class);
+        verify(captureEntry).execute(captor.capture());
 
         assertThat(captor.getValue().getFeeAmount()).isEqualByComparingTo(BigDecimal.ZERO);
     }

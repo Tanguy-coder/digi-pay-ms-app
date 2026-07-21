@@ -1,44 +1,93 @@
 package net.tanguydev.settlementservice.Domain.Entities;
 
-import net.tanguydev.settlementservice.Domain.Enums.EntryType;
-
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public class DomainSettlementEntry {
 
     private UUID id;
-    private UUID settlementId;
+    private UUID batchId;
     private UUID paymentId;
     private String paymentReference;
-    private UUID walletId;
-    private EntryType entryType;
+    private UUID senderWalletId;
+    private UUID receiverWalletId;
     private BigDecimal amount;
     private String currency;
+    private OffsetDateTime capturedAt;
 
-    public DomainSettlementEntry() {}
+    public DomainSettlementEntry() {
+    }
 
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
+    public UUID getId() {
+        return id;
+    }
 
-    public UUID getSettlementId() { return settlementId; }
-    public void setSettlementId(UUID settlementId) { this.settlementId = settlementId; }
+    public void setId(UUID id) {
+        this.id = id;
+    }
 
-    public UUID getPaymentId() { return paymentId; }
-    public void setPaymentId(UUID paymentId) { this.paymentId = paymentId; }
+    public UUID getBatchId() {
+        return batchId;
+    }
 
-    public String getPaymentReference() { return paymentReference; }
-    public void setPaymentReference(String paymentReference) { this.paymentReference = paymentReference; }
+    public void setBatchId(UUID batchId) {
+        this.batchId = batchId;
+    }
 
-    public UUID getWalletId() { return walletId; }
-    public void setWalletId(UUID walletId) { this.walletId = walletId; }
+    public UUID getPaymentId() {
+        return paymentId;
+    }
 
-    public EntryType getEntryType() { return entryType; }
-    public void setEntryType(EntryType entryType) { this.entryType = entryType; }
+    public void setPaymentId(UUID paymentId) {
+        this.paymentId = paymentId;
+    }
 
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
+    public String getPaymentReference() {
+        return paymentReference;
+    }
 
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
+    public void setPaymentReference(String paymentReference) {
+        this.paymentReference = paymentReference;
+    }
+
+    public UUID getSenderWalletId() {
+        return senderWalletId;
+    }
+
+    public void setSenderWalletId(UUID senderWalletId) {
+        this.senderWalletId = senderWalletId;
+    }
+
+    public UUID getReceiverWalletId() {
+        return receiverWalletId;
+    }
+
+    public void setReceiverWalletId(UUID receiverWalletId) {
+        this.receiverWalletId = receiverWalletId;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public OffsetDateTime getCapturedAt() {
+        return capturedAt;
+    }
+
+    public void setCapturedAt(OffsetDateTime capturedAt) {
+        this.capturedAt = capturedAt;
+    }
 }

@@ -11,6 +11,12 @@ spring:
               enabled: true
               lower-case-service-id: true
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/digipay
+
 eureka:
   client:
     service-url:
@@ -30,4 +36,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -3,35 +3,40 @@ package net.tanguydev.settlementservice.Infrastructure.Adapters;
 import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementEntry;
 import net.tanguydev.settlementservice.Domain.Ports.SettlementEntryRepositoryInterface;
 import net.tanguydev.settlementservice.Infrastructure.Mappers.SettlementMapper;
+import net.tanguydev.settlementservice.Infrastructure.Models.SettlementEntry;
 import net.tanguydev.settlementservice.Infrastructure.Repositories.SettlementEntryJpaRepository;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
 
-@Component
+@Repository
 public class SettlementEntryRepository implements SettlementEntryRepositoryInterface {
 
-    private final SettlementEntryJpaRepository jpa;
+    private final SettlementEntryJpaRepository jpaRepository;
     private final SettlementMapper mapper;
 
-    public SettlementEntryRepository(SettlementEntryJpaRepository jpa, SettlementMapper mapper) {
-        this.jpa = jpa;
+    public SettlementEntryRepository(SettlementEntryJpaRepository jpaRepository, SettlementMapper mapper) {
+        this.jpaRepository = jpaRepository;
         this.mapper = mapper;
     }
 
     @Override
     public DomainSettlementEntry save(DomainSettlementEntry entry) {
-        return mapper.toEntryDomain(jpa.save(mapper.toEntryJpa(entry)));
+        SettlementEntry entity = mapper.toEntryJpa(entry);
+        SettlementEntry saved = jpaRepository.save(entity);
+        return mapper.toEntryDomain(saved);
     }
 
     @Override
-    public List<DomainSettlementEntry> findBySettlementId(UUID settlementId) {
-        return mapper.toEntryDomainList(jpa.findBySettlementId(settlementId));
+    public List<DomainSettlementEntry> findByBatchId(UUID batchId) {
+        return jpaRepository.findByBatchId(batchId).stream()
+                .map(mapper::toEntryDomain)
+                .toList();
     }
 
     @Override
     public boolean existsByPaymentId(UUID paymentId) {
-        return jpa.existsByPaymentId(paymentId);
+        return jpaRepository.existsByPaymentId(paymentId);
     }
 }

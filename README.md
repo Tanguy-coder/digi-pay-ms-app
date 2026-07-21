@@ -11,8 +11,8 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Domaine** | Fintech / Banking / Paiement electronique |
 | **Type** | Projet personnel — Portfolio technique senior |
 | **Niveau** | Senior / Expert |
-| **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Docker |
-| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD |
+| **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
+| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker |
 
 **References metier** : Visa/Mastercard (clearing), Flutterwave/Paystack (paiements Afrique), Stripe (APIs), CinetPay/Wave (mobile money).
 
@@ -29,7 +29,9 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 ## Architecture generale
 
 ```
-                        [ API Gateway ]
+                       [ Keycloak ]
+                            │ JWT (RS256)
+                        [ API Gateway ]  ← OAuth2 Resource Server
                               |
        [ Customer MS ] [ Wallet MS ] [ Payment MS ]
              |               |              |
@@ -49,7 +51,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | reponses Saga wallet · `fraud-check-events` |
 | **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
 | **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
-| **Settlement MS** | 8087 | Compensation interbancaire · Position nette · Idempotency par paymentId | `settlement.completed` `settlement.failed` | `payment.completed` |
+| **Settlement MS** | 8087 | Compensation multilaterale · Batches horaires · Net positions · Event Sourcing | `settlement.completed` `settlement.failed` | `payment.completed` |
 
 ## Configuration Kafka
 
@@ -67,12 +69,16 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 
 | Pattern | Application dans ce projet |
 |---|---|
-| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Le solde n'est jamais modifie directement — il est calcule en rejouant WALLET_CREATED → WALLET_CREDITED → WALLET_DEBITED → AMOUNT_FROZEN. Endpoint `/history` pour consulter toutes les operations. |
+| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Settlement MS : l'etat du batch est reconstruit depuis les evenements (`batch_events`). Le solde/statut n'est jamais modifie directement — il est calcule en rejouant les events. |
 | **Saga (Orchestration)** | Payment MS orchestrate DEBIT → FRAUD_CHECK → CREDIT → COMPLETE; compensation automatique si une etape echoue |
 | **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
 | **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
 | **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
 | **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
+| **CQRS** | Command Query Responsibility Segregation : controllers separes en `CommandController` (POST/PUT, @Transactional) et `QueryController` (GET, read-only). Applique sur les 6 services metier. Separation stricte lecture/ecriture au niveau API. |
+| **OAuth2 / JWT** | Securite centralisee via Keycloak (Identity Provider) et Spring Security OAuth2 Resource Server au niveau du gateway. Validation JWT (RS256) a l'entree, extraction des roles Keycloak (`realm_access.roles`) via converter custom. Les microservices en aval n'ont pas de security — ils font confiance au gateway (zero-trust perimetrique). |
+| **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
+| **Circuit Breaker / Retry** | Resilience4j sur le `OutboxRelay` du payment-service : Retry (3 tentatives, 500ms) + Circuit Breaker (CLOSED/OPEN/HALF-OPEN). Si Kafka est indisponible, le circuit s'ouvre apres 50% d'echecs sur 10 appels, et l'event reste dans l'outbox pour etre rejoue. Protege contre les cascades de pannes. |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
 ### Saga Pattern — Flux de transfert P2P avec detection fraude
@@ -114,8 +120,8 @@ Notification MS
 Settlement MS
   10. Recoit payment.completed sur payment-events (group: settlement-group)
   11. Verifie idempotency (paymentId deja traite → skip)
-  12. Cree un settlement (status PROCESSING) + 2 entries (DEBIT sender, CREDIT receiver)
-  13. Calcule la position nette, passe en COMPLETED
+  12. Capture l'entry dans le batch ouvert (Event Sourcing)
+  13. Scheduler horaire : close batch → calculate net positions → apply settlement → complete
   14. Publie settlement.completed sur settlement-events
 ```
 
@@ -146,7 +152,9 @@ Settlement MS
 | Conteneurisation | Docker + Docker Compose |
 | Service Discovery | Spring Cloud Netflix Eureka |
 | API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
-| Observabilite | Prometheus + Zipkin (prevu Phase 7) |
+| Securite | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
+| Observabilite | Prometheus · Grafana · Micrometer (metriques temps reel) |
+| Resilience | Resilience4j (Circuit Breaker + Retry sur publication Kafka) |
 
 ## Architecture logicielle (par service)
 
@@ -167,12 +175,13 @@ service/
 └── Infrastructure/                  # Adaptateurs techniques
     ├── Config/                      # DomainConfig (beans use cases) + PresentationConfig (presenter)
     ├── Consumers/                   # Kafka consumers
-    ├── Controllers/                 # API REST
+    ├── Controllers/                 # API REST (CQRS : CommandController + QueryController)
     ├── EventStore/                  # Event Store PostgreSQL (append-only, table wallet_events)
     ├── Mappers/                     # MapStruct : Domain <-> JPA <-> Response
-    ├── Models/                      # Entites JPA (projection / read model)
+    ├── Models/                      # Entites JPA (projection / read model / OutboxEvent)
     ├── Presenters/                  # Implementation des interfaces presenter
-    └── Repositories/                # JpaRepository + adaptateur hexagonal
+    ├── Repositories/                # JpaRepository + adaptateur hexagonal
+    └── Schedulers/                  # OutboxRelay (polling 1s) + BatchScheduler (settlement)
 ```
 
 ## Structure du repository
@@ -187,7 +196,8 @@ digi-pay-ms-app/
 ├── settlement-service/       → Settlement MS   (port 8087)
 ├── discovery-service/        → Eureka Server   (port 8761)
 ├── gateway-service/          → API Gateway     (port 8888)
-├── docker-compose.yaml       → Kafka + Redis + 7 services applicatifs
+├── keycloak/                 → Realm export (auto-import au boot)
+├── docker-compose.yaml       → Keycloak + Kafka + Redis + 8 services applicatifs
 ├── e2e-fraud.sh              → Scenarios E2E fraud detection
 ├── e2e-settlement.sh         → Scenarios E2E settlement
 ├── e2e-gateway.sh            → Scenarios E2E gateway routing
@@ -209,11 +219,32 @@ digi-pay-ms-app/
 docker compose up --build -d
 ```
 
+### Obtenir un token JWT (Keycloak)
+
+```bash
+# Obtenir un token pour l'utilisateur user1 (role USER)
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/digipay/protocol/openid-connect/token \
+  -d "grant_type=password" \
+  -d "client_id=digipay-gateway" \
+  -d "client_secret=digipay-gateway-secret" \
+  -d "username=user1" \
+  -d "password=password" | jq -r '.access_token')
+
+# Appeler un service via le gateway avec le token
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8888/customer-service/api/v1/customers
+```
+
+Utilisateurs pre-configures :
+| Username | Password | Roles |
+|---|---|---|
+| `user1` | `password` | USER |
+| `admin1` | `password` | USER, ADMIN |
+
 ### Demarrage local (developpement)
 
 ```bash
 # 1. Infrastructure
-docker compose up kafka redis -d
+docker compose up kafka redis keycloak keycloak-db -d
 
 # 2. Discovery + Gateway
 cd discovery-service && ./mvnw spring-boot:run
@@ -303,10 +334,10 @@ chmod +x e2e-settlement.sh && ./e2e-settlement.sh
 ```
 
 Scenarios couverts :
-- **Scenario 1** : paiement completed → settlement cree avec status `COMPLETED`
-- **Scenario 2** : consultation settlement par ID
-- **Scenario 3** : second paiement → second settlement
-- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon settlement
+- **Scenario 1** : paiement completed → entry capturee dans le batch ouvert
+- **Scenario 2** : consultation du batch courant + entries + positions nettes
+- **Scenario 3** : fermeture manuelle du batch → calcul positions
+- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon entry
 
 ### Scenarios de test valides
 
@@ -381,15 +412,21 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 
 | Methode | URL | Description |
 |---|---|---|
-| GET | `/api/settlements` | Lister tous les settlements |
-| GET | `/api/settlements/{id}` | Consulter un settlement par UUID |
+| GET | `/api/settlements/batches` | Lister tous les batches |
+| GET | `/api/settlements/batches/current?currency=XAF` | Batch ouvert en cours |
+| GET | `/api/settlements/batches/{id}` | Consulter un batch par UUID |
+| GET | `/api/settlements/batches/{id}/entries` | Entries (paiements captures) du batch |
+| GET | `/api/settlements/batches/{id}/positions` | Positions nettes du batch |
+| POST | `/api/settlements/batches/open` | Ouvrir un batch manuellement |
+| POST | `/api/settlements/batches/{id}/close` | Fermer un batch manuellement |
 
-### Discovery & Gateway
+### Discovery, Gateway & Security
 
 | Service | Port | Description |
 |---|---|---|
 | Eureka Server | 8761 | Service registry (dashboard: http://localhost:8761) |
-| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka |
+| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka, validation JWT |
+| Keycloak | 8080 | Identity Provider (OIDC), realm `digipay`, roles USER/ADMIN |
 
 ### URLs utiles
 
@@ -405,10 +442,14 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Payment H2 Console | http://localhost:8084/h2-console |
 | Fraud H2 Console | http://localhost:8085/h2-console |
 | Notification H2 Console | http://localhost:8086/h2-console |
-| Settlement API | http://localhost:8087/api/settlements |
+| Settlement API | http://localhost:8087/api/settlements/batches |
 | Settlement H2 Console | http://localhost:8087/h2-console |
 | Eureka Dashboard | http://localhost:8761 |
 | Gateway | http://localhost:8888 |
+| Keycloak Admin Console | http://localhost:8080 (admin / admin) |
+| Keycloak Token Endpoint | http://localhost:8080/realms/digipay/protocol/openid-connect/token |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 (admin / admin) |
 
 ## Communication Kafka entre services
 
@@ -467,12 +508,18 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
                                              │   Settlement Service     │
                                              │      (port 8087)         │
                                              │                          │
+                                             │  EVENT SOURCING          │
+                                             │  batch_events            │
+                                             │  (append-only)           │
+                                             │                          │
                                              │  Consomme:               │
                                              │  - payment.completed     │
+                                             │    → capture entry       │
                                              │                          │
-                                             │  Cree settlement +       │
-                                             │  2 entries (DEBIT/CREDIT)│
-                                             │  Idempotency paymentId   │
+                                             │  Scheduler horaire:      │
+                                             │  close → calculate net   │
+                                             │  positions → apply →     │
+                                             │  complete batch          │
                                              │                          │
                                              │  Publie:                 │
                                              │  - settlement.completed  │
@@ -495,13 +542,14 @@ cd settlement-service    && ./mvnw test
 
 | Service | Tests | Couverture |
 |---|---|---|
-| customer-service | 19 | Use cases (create, find, update) + Integration controller |
-| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + Controller (7) + History (2) + Integration (1) |
-| payment-service | 21 | Use cases (3) + Saga (7) + Find (4) + Controller (6) + WebMvc (1) |
-| fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + FraudController (5) + ApplicationContext (1) |
-| notification-service | 12 | SendNotificationUseCase (6) + NotificationController (5) + ApplicationContext (1) |
-| settlement-service | 14 | ProcessPaymentSettlementUseCase (5) + SettlementController (4) + PaymentEventConsumer (4) + ApplicationContext (1) |
-| **Total** | **124** | |
+| customer-service | 18 | Use cases (create, find, update) + CommandController (2) + QueryController (2) + Integration (1) |
+| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + CommandController (5) + QueryController (2) + History (2) + Integration (1) |
+| payment-service | 24 | Use cases (3) + Saga (7) + Find (4) + CommandController (3) + QueryController (3) + CircuitBreaker (3) + Integration (1) |
+| fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
+| notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
+| settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
+| gateway-service | 5 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) |
+| **Total** | **146** | |
 
 ## Roadmap
 
@@ -512,14 +560,20 @@ cd settlement-service    && ./mvnw test
 | Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + Tests E2E | Termine |
 | Phase 4 | Fraud Detection MS + Notification MS | Termine |
 | Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Termine |
-| Phase 6 | Settlement MS (compensation interbancaire, position nette, 14 tests) | Termine |
-| Phase 7 | Event Sourcing (Wallet MS) + CI/CD GitLab | Termine |
-| Phase 8 | CQRS + Observabilite (Prometheus + Zipkin) | A venir |
+| Phase 6 | Settlement MS v1 (compensation simple, position nette) | Termine |
+| Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Termine |
+| Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
+| Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
+| Phase 10 | CQRS (controllers Command/Query separes, 6 services) | Termine |
+| Phase 11 | Securite JWT/Keycloak via API Gateway (OAuth2 Resource Server, realm auto-import, 5 tests) | Termine |
+| Phase 12a | Observabilite : Prometheus + Grafana (metriques temps reel, 8 services scraped, dashboards) | Termine |
+| Phase 12b | Resilience : Circuit Breaker + Retry Resilience4j sur OutboxRelay (3 tests) | Termine |
+| Phase 12c | Tracing distribue (Zipkin) | A venir |
 
 ## Approfondissements prevus (Senior+)
 
 - Exactly-Once Semantics Kafka (`isolation.level = read_committed`)
-- Outbox Pattern avec Debezium (CDC pour garantie transactionnelle DB → Kafka)
+- Migration Outbox relay → Debezium CDC (capture WAL PostgreSQL, zero polling)
 - GDPR Compliance (chiffrement PII, droit a l'oubli dans les topics)
 - gRPC entre services (queries synchrones haute-performance)
 - Kubernetes (Helm charts, HPA, PodDisruptionBudget)
