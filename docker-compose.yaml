@@ -281,7 +281,7 @@ services:
       - sonar_extensions:/opt/sonarqube/extensions
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:1.76.0
     container_name: jaeger
     ports:
       - "16686:16686"
