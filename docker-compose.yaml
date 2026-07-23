@@ -134,6 +134,7 @@ services:
       - kafka
       - discovery-service
       - customer-db
+      - jaeger
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -142,6 +143,7 @@ services:
       DB_NAME: customer_db
       DB_USER: customer
       DB_PASSWORD: customer
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   wallet-service:
     build: ./wallet-service
@@ -154,6 +156,7 @@ services:
       - kafka
       - discovery-service
       - wallet-db
+      - jaeger
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -162,6 +165,7 @@ services:
       DB_NAME: wallet_db
       DB_USER: wallet
       DB_PASSWORD: wallet
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   payment-service:
     build: ./payment-service
@@ -175,6 +179,7 @@ services:
       - redis
       - discovery-service
       - payment-db
+      - jaeger
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -185,6 +190,7 @@ services:
       DB_NAME: payment_db
       DB_USER: payment
       DB_PASSWORD: payment
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   fraud-service:
     build: ./fraud-service
@@ -197,6 +203,7 @@ services:
       - kafka
       - discovery-service
       - fraud-db
+      - jaeger
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -205,6 +212,7 @@ services:
       DB_NAME: fraud_db
       DB_USER: fraud
       DB_PASSWORD: fraud
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   notification-service:
     build: ./notification-service
@@ -216,9 +224,11 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - jaeger
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   settlement-service:
     build: ./settlement-service
@@ -231,6 +241,7 @@ services:
       - kafka
       - discovery-service
       - settlement-db
+      - jaeger
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -239,6 +250,7 @@ services:
       DB_NAME: settlement_db
       DB_USER: settlement
       DB_PASSWORD: settlement
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   gateway-service:
     build: ./gateway-service
@@ -250,9 +262,11 @@ services:
     depends_on:
       - discovery-service
       - keycloak
+      - jaeger
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/digipay
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   sonarqube:
     image: sonarqube:community
@@ -265,6 +279,15 @@ services:
       - sonar_data:/opt/sonarqube/data
       - sonar_logs:/opt/sonarqube/logs
       - sonar_extensions:/opt/sonarqube/extensions
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
 
   prometheus:
     image: prom/prometheus:v2.54.1
