@@ -4,41 +4,51 @@ import net.tanguydev.paymentservice.Domain.Validations.Exception.DomainValidatio
 import net.tanguydev.paymentservice.Domain.Validations.Exception.DuplicatePaymentException;
 import net.tanguydev.paymentservice.Domain.Validations.Exception.PaymentNotFoundException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
-        Map<String, String> fieldErrors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors()
-                .forEach(e -> fieldErrors.put(e.getField(), e.getDefaultMessage()));
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(Map.of("errors", fieldErrors));
-    }
-
-    @ExceptionHandler(DomainValidationException.class)
-    public ResponseEntity<Map<String, Object>> handleDomainValidation(DomainValidationException ex) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(Map.of("errors", ex.getErrors()));
-    }
-
     @ExceptionHandler(PaymentNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(PaymentNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", ex.getMessage()));
+    public ProblemDetail handlePaymentNotFound(PaymentNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Payment Not Found");
+        problem.setType(URI.create("https://digipay.io/errors/payment-not-found"));
+        return problem;
     }
 
     @ExceptionHandler(DuplicatePaymentException.class)
-    public ResponseEntity<Map<String, String>> handleDuplicate(DuplicatePaymentException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", ex.getMessage()));
+    public ProblemDetail handleDuplicatePayment(DuplicatePaymentException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Duplicate Payment");
+        problem.setType(URI.create("https://digipay.io/errors/duplicate-payment"));
+        return problem;
+    }
+
+    @ExceptionHandler(DomainValidationException.class)
+    public ProblemDetail handleDomainValidation(DomainValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, "Validation failed");
+        problem.setTitle("Validation Error");
+        problem.setType(URI.create("https://digipay.io/errors/validation-error"));
+        problem.setProperty("errors", ex.getErrors());
+        return problem;
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, "Validation failed");
+        problem.setTitle("Validation Error");
+        problem.setType(URI.create("https://digipay.io/errors/validation-error"));
+        problem.setProperty("errors", errors);
+        return problem;
     }
 }

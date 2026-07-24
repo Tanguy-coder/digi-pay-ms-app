@@ -5,6 +5,7 @@ import net.tanguydev.paymentservice.Domain.Presenters.PaymentPresenterInterface;
 import net.tanguydev.paymentservice.Domain.Responses.PaymentResponse;
 import net.tanguydev.paymentservice.Domain.UseCases.FindPaymentByIdUseCaseInterface;
 import net.tanguydev.paymentservice.Domain.UseCases.FindPaymentsByWalletUseCaseInterface;
+import net.tanguydev.paymentservice.Domain.Validations.Exception.PaymentNotFoundException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,7 +33,7 @@ public class PaymentQueryController {
         return findById.execute(id)
                 .map(presenter::present)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new PaymentNotFoundException(id));
     }
 
     @GetMapping("/wallet/{walletId}")

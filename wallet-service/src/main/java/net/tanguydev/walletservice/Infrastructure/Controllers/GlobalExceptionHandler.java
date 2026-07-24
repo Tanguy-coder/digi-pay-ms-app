@@ -5,55 +5,59 @@ import net.tanguydev.walletservice.Domain.Validations.Exception.InsufficientBala
 import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotActiveException;
 import net.tanguydev.walletservice.Domain.Validations.Exception.WalletNotFoundException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(DomainValidationException.class)
-    public ResponseEntity<Map<String, Object>> handleDomainValidation(DomainValidationException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", "Validation failed");
-        body.put("errors", ex.getErrors());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
-    }
-
     @ExceptionHandler(WalletNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleWalletNotFound(WalletNotFoundException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    public ProblemDetail handleWalletNotFound(WalletNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Wallet Not Found");
+        problem.setType(URI.create("https://digipay.io/errors/wallet-not-found"));
+        return problem;
     }
 
     @ExceptionHandler(InsufficientBalanceException.class)
-    public ResponseEntity<Map<String, Object>> handleInsufficientBalance(InsufficientBalanceException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    public ProblemDetail handleInsufficientBalance(InsufficientBalanceException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Insufficient Balance");
+        problem.setType(URI.create("https://digipay.io/errors/insufficient-balance"));
+        return problem;
     }
 
     @ExceptionHandler(WalletNotActiveException.class)
-    public ResponseEntity<Map<String, Object>> handleWalletNotActive(WalletNotActiveException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    public ProblemDetail handleWalletNotActive(WalletNotActiveException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Wallet Not Active");
+        problem.setType(URI.create("https://digipay.io/errors/wallet-not-active"));
+        return problem;
+    }
+
+    @ExceptionHandler(DomainValidationException.class)
+    public ProblemDetail handleDomainValidation(DomainValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, "Validation failed");
+        problem.setTitle("Validation Error");
+        problem.setType(URI.create("https://digipay.io/errors/validation-error"));
+        problem.setProperty("errors", ex.getErrors());
+        return problem;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+    public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error ->
-                errors.put(error.getField(), error.getDefaultMessage())
-        );
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", "Validation failed");
-        body.put("errors", errors);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+        ex.getBindingResult().getFieldErrors().forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, "Validation failed");
+        problem.setTitle("Validation Error");
+        problem.setType(URI.create("https://digipay.io/errors/validation-error"));
+        problem.setProperty("errors", errors);
+        return problem;
     }
 }
