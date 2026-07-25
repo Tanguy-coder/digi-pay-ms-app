@@ -1,4 +1,64 @@
 services:
+  customer-db:
+    image: postgres:16-alpine
+    container_name: customer-db
+    environment:
+      POSTGRES_DB: customer_db
+      POSTGRES_USER: customer
+      POSTGRES_PASSWORD: customer
+    volumes:
+      - customer_db_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+
+  wallet-db:
+    image: postgres:16-alpine
+    container_name: wallet-db
+    environment:
+      POSTGRES_DB: wallet_db
+      POSTGRES_USER: wallet
+      POSTGRES_PASSWORD: wallet
+    volumes:
+      - wallet_db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+
+  payment-db:
+    image: postgres:16-alpine
+    container_name: payment-db
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: payment
+      POSTGRES_PASSWORD: payment
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+
+  fraud-db:
+    image: postgres:16-alpine
+    container_name: fraud-db
+    environment:
+      POSTGRES_DB: fraud_db
+      POSTGRES_USER: fraud
+      POSTGRES_PASSWORD: fraud
+    volumes:
+      - fraud_db_data:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+
+  settlement-db:
+    image: postgres:16-alpine
+    container_name: settlement-db
+    environment:
+      POSTGRES_DB: settlement_db
+      POSTGRES_USER: settlement
+      POSTGRES_PASSWORD: settlement
+    volumes:
+      - settlement_db_data:/var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+
   keycloak-db:
     image: postgres:16-alpine
     container_name: keycloak-db
@@ -73,9 +133,17 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - customer-db
+      - jaeger
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      DB_HOST: customer-db
+      DB_NAME: customer_db
+      DB_USER: customer
+      DB_PASSWORD: customer
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   wallet-service:
     build: ./wallet-service
@@ -87,9 +155,17 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - wallet-db
+      - jaeger
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      DB_HOST: wallet-db
+      DB_NAME: wallet_db
+      DB_USER: wallet
+      DB_PASSWORD: wallet
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   payment-service:
     build: ./payment-service
@@ -102,11 +178,19 @@ services:
       - kafka
       - redis
       - discovery-service
+      - payment-db
+      - jaeger
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      DB_HOST: payment-db
+      DB_NAME: payment_db
+      DB_USER: payment
+      DB_PASSWORD: payment
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   fraud-service:
     build: ./fraud-service
@@ -118,9 +202,17 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - fraud-db
+      - jaeger
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      DB_HOST: fraud-db
+      DB_NAME: fraud_db
+      DB_USER: fraud
+      DB_PASSWORD: fraud
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   notification-service:
     build: ./notification-service
@@ -132,9 +224,11 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - jaeger
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   settlement-service:
     build: ./settlement-service
@@ -146,9 +240,17 @@ services:
     depends_on:
       - kafka
       - discovery-service
+      - settlement-db
+      - jaeger
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      DB_HOST: settlement-db
+      DB_NAME: settlement_db
+      DB_USER: settlement
+      DB_PASSWORD: settlement
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   gateway-service:
     build: ./gateway-service
@@ -160,9 +262,11 @@ services:
     depends_on:
       - discovery-service
       - keycloak
+      - jaeger
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/digipay
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
 
   sonarqube:
     image: sonarqube:community
@@ -175,6 +279,15 @@ services:
       - sonar_data:/opt/sonarqube/data
       - sonar_logs:/opt/sonarqube/logs
       - sonar_extensions:/opt/sonarqube/extensions
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -204,6 +317,11 @@ services:
       - prometheus
 
 volumes:
+  customer_db_data:
+  wallet_db_data:
+  payment_db_data:
+  fraud_db_data:
+  settlement_db_data:
   keycloak_db_data:
   sonar_data:
   sonar_logs:

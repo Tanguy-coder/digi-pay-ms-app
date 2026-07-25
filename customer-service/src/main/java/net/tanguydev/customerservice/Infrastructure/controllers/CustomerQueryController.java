@@ -4,6 +4,7 @@ import net.tanguydev.customerservice.Domain.Presenters.CustomerPresenterInterfac
 import net.tanguydev.customerservice.Domain.Responses.CustomerResponse;
 import net.tanguydev.customerservice.Domain.UseCases.FindCutomerByIdUseCaseInterface;
 import net.tanguydev.customerservice.Domain.UseCases.ListCustomersUseCaseInterface;
+import net.tanguydev.customerservice.Domain.Validations.Exception.CustomerNotFoundException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +37,6 @@ public class CustomerQueryController {
         return find.execute(id)
                 .map(presenter::present)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CustomerNotFoundException(id));
     }
 }
