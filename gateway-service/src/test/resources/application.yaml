@@ -1,0 +1,31 @@
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          default-filters: []
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/digipay
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
+
+gateway:
+  params:
+    connect-timeout-ms: 3000
+    response-timeout-ms: 5000
