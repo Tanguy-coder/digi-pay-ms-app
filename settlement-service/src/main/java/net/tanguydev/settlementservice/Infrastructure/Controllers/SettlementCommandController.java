@@ -1,5 +1,9 @@
 package net.tanguydev.settlementservice.Infrastructure.Controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementBatch;
 import net.tanguydev.settlementservice.Domain.Enums.SettlementCycle;
 import net.tanguydev.settlementservice.Domain.Presenters.BatchPresenterInterface;
@@ -13,8 +17,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "Settlement Batches")
 @RestController
 @RequestMapping("/api/settlements/batches")
+@SecurityRequirement(name = "BearerAuth")
 public class SettlementCommandController {
 
     private final OpenBatchUseCaseInterface openBatchUseCase;
@@ -29,6 +35,12 @@ public class SettlementCommandController {
         this.presenter = presenter;
     }
 
+    @Operation(summary = "Open a settlement batch",
+            description = "Opens a new batch for the given cycle and currency. Only one batch can be open at a time per currency.",
+            responses = {
+                    @ApiResponse(responseCode = "201", description = "Batch opened"),
+                    @ApiResponse(responseCode = "409", description = "A batch is already open for this currency")
+            })
     @PostMapping("/open")
     @Transactional
     public ResponseEntity<BatchResponse> openBatch(
@@ -38,6 +50,13 @@ public class SettlementCommandController {
         return ResponseEntity.status(HttpStatus.CREATED).body(presenter.present(batch));
     }
 
+    @Operation(summary = "Close a settlement batch",
+            description = "Closes the batch and triggers net position calculation. The hourly scheduler also closes batches automatically.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Batch closed"),
+                    @ApiResponse(responseCode = "404", description = "Batch not found"),
+                    @ApiResponse(responseCode = "409", description = "Batch already closed")
+            })
     @PostMapping("/{id}/close")
     @Transactional
     public ResponseEntity<Void> closeBatch(@PathVariable UUID id) {

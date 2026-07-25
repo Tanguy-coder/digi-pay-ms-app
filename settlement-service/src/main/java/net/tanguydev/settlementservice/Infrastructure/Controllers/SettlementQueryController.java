@@ -1,5 +1,9 @@
 package net.tanguydev.settlementservice.Infrastructure.Controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import net.tanguydev.settlementservice.Domain.Entities.DomainNetPosition;
 import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementBatch;
 import net.tanguydev.settlementservice.Domain.Entities.DomainSettlementEntry;
@@ -15,8 +19,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Settlement Batches")
 @RestController
 @RequestMapping("/api/settlements/batches")
+@SecurityRequirement(name = "BearerAuth")
 public class SettlementQueryController {
 
     private final SettlementBatchRepositoryInterface batchRepository;
@@ -34,6 +40,8 @@ public class SettlementQueryController {
         this.presenter = presenter;
     }
 
+    @Operation(summary = "List all settlement batches",
+            responses = @ApiResponse(responseCode = "200", description = "All batches"))
     @GetMapping
     public ResponseEntity<List<BatchResponse>> getAllBatches() {
         List<BatchResponse> responses = batchRepository.findAll().stream()
@@ -42,6 +50,11 @@ public class SettlementQueryController {
         return ResponseEntity.ok(responses);
     }
 
+    @Operation(summary = "Get the current open batch for a currency",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Open batch found"),
+                    @ApiResponse(responseCode = "404", description = "No open batch for this currency")
+            })
     @GetMapping("/current")
     public ResponseEntity<BatchResponse> getCurrentBatch(@RequestParam(defaultValue = "XAF") String currency) {
         return batchRepository.findCurrentOpenBatch(currency)
@@ -51,6 +64,11 @@ public class SettlementQueryController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @Operation(summary = "Get a batch by ID",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Batch found"),
+                    @ApiResponse(responseCode = "404", description = "Batch not found")
+            })
     @GetMapping("/{id}")
     public ResponseEntity<BatchResponse> getBatchById(@PathVariable UUID id) {
         return batchRepository.findById(id)
@@ -60,12 +78,23 @@ public class SettlementQueryController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @Operation(summary = "List entries (captured payments) in a batch",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Batch entries"),
+                    @ApiResponse(responseCode = "404", description = "Batch not found")
+            })
     @GetMapping("/{id}/entries")
     public ResponseEntity<List<DomainSettlementEntry>> getBatchEntries(@PathVariable UUID id) {
         batchRepository.findById(id).orElseThrow(() -> new BatchNotFoundException(id));
         return ResponseEntity.ok(entryRepository.findByBatchId(id));
     }
 
+    @Operation(summary = "Get net positions for a batch",
+            description = "Net positions are calculated when the batch is closed. Each position shows the net amount owed between two wallets.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Net positions"),
+                    @ApiResponse(responseCode = "404", description = "Batch not found")
+            })
     @GetMapping("/{id}/positions")
     public ResponseEntity<List<DomainNetPosition>> getBatchPositions(@PathVariable UUID id) {
         batchRepository.findById(id).orElseThrow(() -> new BatchNotFoundException(id));

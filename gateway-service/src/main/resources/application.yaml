@@ -44,6 +44,23 @@ gateway:
 server:
   port: 8888
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: customer-service
+        url: /customer-service/v3/api-docs
+      - name: wallet-service
+        url: /wallet-service/v3/api-docs
+      - name: payment-service
+        url: /payment-service/v3/api-docs
+      - name: fraud-service
+        url: /fraud-service/v3/api-docs
+      - name: notification-service
+        url: /notification-service/v3/api-docs
+      - name: settlement-service
+        url: /settlement-service/v3/api-docs
+
 management:
   endpoints:
     web:
