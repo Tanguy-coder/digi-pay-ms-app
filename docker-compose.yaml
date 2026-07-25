@@ -262,11 +262,14 @@ services:
     depends_on:
       - discovery-service
       - keycloak
+      - redis
       - jaeger
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/digipay
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
   sonarqube:
     image: sonarqube:community

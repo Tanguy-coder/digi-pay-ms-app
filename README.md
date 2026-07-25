@@ -12,7 +12,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **Type** | Projet personnel — Portfolio technique senior |
 | **Niveau** | Senior / Expert |
 | **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
-| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker |
+| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker · Rate Limiting |
 
 **References metier** : Visa/Mastercard (clearing), Flutterwave/Paystack (paiements Afrique), Stripe (APIs), CinetPay/Wave (mobile money).
 
@@ -22,6 +22,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 - Portefeuilles electroniques avec gestion des soldes et gel de fonds
 - Paiements marchands et transferts peer-to-peer avec Saga distribue
 - Idempotency garantie sur les paiements via Redis
+- Rate limiting distribue (Token Bucket) sur le gateway : 10 req/s par utilisateur JWT (ou IP), burst 20
 - Reglement interbancaire avec calcul de position nette
 - Detection de fraude en temps reel (7 regles configurables, score de risque 0-100)
 - Notifications temps reel : paiement initie, complete, echoue, fraude detectee
@@ -31,7 +32,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 ```
                        [ Keycloak ]
                             │ JWT (RS256)
-                        [ API Gateway ]  ← OAuth2 Resource Server
+                        [ API Gateway ]  ← OAuth2 Resource Server · Rate Limiter (Token Bucket)
                               |
        [ Customer MS ] [ Wallet MS ] [ Payment MS ]
              |               |              |
@@ -79,6 +80,7 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
 | **OAuth2 / JWT** | Securite centralisee via Keycloak (Identity Provider) et Spring Security OAuth2 Resource Server au niveau du gateway. Validation JWT (RS256) a l'entree, extraction des roles Keycloak (`realm_access.roles`) via converter custom. Les microservices en aval n'ont pas de security — ils font confiance au gateway (zero-trust perimetrique). |
 | **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
 | **Circuit Breaker / Retry** | Resilience4j sur le `OutboxRelay` du payment-service : Retry (3 tentatives, 500ms) + Circuit Breaker (CLOSED/OPEN/HALF-OPEN). Si Kafka est indisponible, le circuit s'ouvre apres 50% d'echecs sur 10 appels, et l'event reste dans l'outbox pour etre rejoue. Protege contre les cascades de pannes. |
+| **Rate Limiting (Token Bucket)** | Spring Cloud Gateway + Redis : `RequestRateLimiter` global sur tous les routes. 10 tokens/s recharges, burst max 20. Cle = `sub` JWT si authentifie, IP sinon. HTTP 429 si seau vide. Compteurs stockes dans Redis → limite partagee entre toutes les instances gateway. |
 | **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
 
 ### Saga Pattern — Flux de transfert P2P avec detection fraude
@@ -145,16 +147,17 @@ Settlement MS
 |---|---|
 | Backend | Spring Boot 4.1.0 (Java 21) |
 | Messaging | Apache Kafka 3.9+ (KRaft mode) |
-| Base de donnees | H2 in-memory (dev/test) |
+| Base de donnees | PostgreSQL 16 (prod) · H2 in-memory (dev/test) |
 | Cache / Idempotency | Redis 7 |
 | Mapping objets | MapStruct 1.5.5 |
-| Tests | JUnit 5, Mockito, @WebMvcTest |
+| Tests | JUnit 5, Mockito, @WebMvcTest, Testcontainers |
 | Conteneurisation | Docker + Docker Compose |
 | Service Discovery | Spring Cloud Netflix Eureka |
 | API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
 | Securite | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
-| Observabilite | Prometheus · Grafana · Micrometer (metriques temps reel) |
+| Observabilite | Prometheus · Grafana · Micrometer (metriques temps reel) · Jaeger + OpenTelemetry (tracing distribue) |
 | Resilience | Resilience4j (Circuit Breaker + Retry sur publication Kafka) |
+| Rate Limiting | Redis 7 + Spring Cloud Gateway `RequestRateLimiter` (Token Bucket, 10 req/s par utilisateur) |
 
 ## Architecture logicielle (par service)
 
@@ -425,8 +428,9 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Service | Port | Description |
 |---|---|---|
 | Eureka Server | 8761 | Service registry (dashboard: http://localhost:8761) |
-| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka, validation JWT |
+| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka, validation JWT, rate limiting Redis |
 | Keycloak | 8080 | Identity Provider (OIDC), realm `digipay`, roles USER/ADMIN |
+| Jaeger | 16686 | Tracing distribue — traces OpenTelemetry de tous les services |
 
 ### URLs utiles
 
@@ -437,17 +441,12 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Payment API | http://localhost:8084/api/v1/payments |
 | Fraud API | http://localhost:8085/api/v1/fraud-analyses |
 | Notification API | http://localhost:8086/api/v1/notifications |
-| Customer H2 Console | http://localhost:8082/h2-console |
-| Wallet H2 Console | http://localhost:8083/h2-console |
-| Payment H2 Console | http://localhost:8084/h2-console |
-| Fraud H2 Console | http://localhost:8085/h2-console |
-| Notification H2 Console | http://localhost:8086/h2-console |
 | Settlement API | http://localhost:8087/api/settlements/batches |
-| Settlement H2 Console | http://localhost:8087/h2-console |
 | Eureka Dashboard | http://localhost:8761 |
 | Gateway | http://localhost:8888 |
 | Keycloak Admin Console | http://localhost:8080 (admin / admin) |
 | Keycloak Token Endpoint | http://localhost:8080/realms/digipay/protocol/openid-connect/token |
+| Jaeger UI (tracing) | http://localhost:16686 |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3000 (admin / admin) |
 
@@ -548,8 +547,8 @@ cd settlement-service    && ./mvnw test
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
 | settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
-| gateway-service | 5 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) |
-| **Total** | **146** | |
+| gateway-service | 7 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) + RateLimiterConfig (bean present, anonymous → IP) |
+| **Total** | **148** | |
 
 ## Roadmap
 
@@ -568,7 +567,11 @@ cd settlement-service    && ./mvnw test
 | Phase 11 | Securite JWT/Keycloak via API Gateway (OAuth2 Resource Server, realm auto-import, 5 tests) | Termine |
 | Phase 12a | Observabilite : Prometheus + Grafana (metriques temps reel, 8 services scraped, dashboards) | Termine |
 | Phase 12b | Resilience : Circuit Breaker + Retry Resilience4j sur OutboxRelay (3 tests) | Termine |
-| Phase 12c | Tracing distribue (Zipkin) | A venir |
+| Phase 12c | Tracing distribue : OpenTelemetry + Jaeger (trace IDs propagés sur 8 services, OTLP) | Termine |
+| Phase 12d | RFC 7807 Problem Details : format d'erreur standardise sur les 6 services metier | Termine |
+| Phase 12e | Migration PostgreSQL : 5 services metier (Flyway, profils dev/prod, schema versione) | Termine |
+| Phase 12f | Rate Limiting distribue : Token Bucket Redis sur le gateway (10 req/s, JWT sub ou IP, HTTP 429) | Termine |
+| Phase 13 | OpenAPI / Swagger : documentation automatique des APIs | A venir |
 
 ## Approfondissements prevus (Senior+)
 

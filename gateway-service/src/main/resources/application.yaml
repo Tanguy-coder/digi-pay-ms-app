@@ -2,6 +2,11 @@ spring:
   application:
     name: gateway-service
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   cloud:
     gateway:
       server:
@@ -10,6 +15,13 @@ spring:
             locator:
               enabled: true
               lower-case-service-id: true
+          default-filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
 
   security:
     oauth2:
@@ -31,6 +43,23 @@ gateway:
 
 server:
   port: 8888
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: customer-service
+        url: /customer-service/v3/api-docs
+      - name: wallet-service
+        url: /wallet-service/v3/api-docs
+      - name: payment-service
+        url: /payment-service/v3/api-docs
+      - name: fraud-service
+        url: /fraud-service/v3/api-docs
+      - name: notification-service
+        url: /notification-service/v3/api-docs
+      - name: settlement-service
+        url: /settlement-service/v3/api-docs
 
 management:
   endpoints:
