@@ -1,5 +1,6 @@
 package net.tanguydev.paymentservice.Infrastructure.Controllers;
 
+import io.micrometer.observation.annotation.Observed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/payments")
 @SecurityRequirement(name = "BearerAuth")
+@Observed(name = "payment.command.controller")
 public class PaymentCommandController {
 
     private final InitiatePaymentUseCaseInterface initiate;

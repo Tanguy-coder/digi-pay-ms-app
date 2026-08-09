@@ -22,6 +22,8 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.type.mapping: customerEvent:net.tanguydev.customerservice.Domain.Events.CustomerEvent
+    template:
+      observation-enabled: true
 eureka:
   client:
     service-url:

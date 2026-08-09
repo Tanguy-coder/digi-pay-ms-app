@@ -1,5 +1,6 @@
 package net.tanguydev.walletservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.walletservice.Domain.Entities.DomainWallet;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
 import net.tanguydev.walletservice.Domain.Enums.WalletType;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@Observed(name = "wallet.customer-event.consumer")
 public class CustomerEventConsumer {
 
     private final WalletServiceInterface walletService;

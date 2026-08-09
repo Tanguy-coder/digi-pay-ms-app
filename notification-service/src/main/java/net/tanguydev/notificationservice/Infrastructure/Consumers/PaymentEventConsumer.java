@@ -1,5 +1,6 @@
 package net.tanguydev.notificationservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.notificationservice.Domain.Enums.NotificationType;
 import net.tanguydev.notificationservice.Domain.UseCases.SendNotificationCommand;
 import net.tanguydev.notificationservice.Domain.UseCases.SendNotificationUseCaseInterface;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@Observed(name = "notification.payment-event.consumer")
 public class PaymentEventConsumer {
 
     private final SendNotificationUseCaseInterface sendNotification;
