@@ -40,20 +40,17 @@ public class CreateWalletUseCase implements CreateWalletUseCaseInterface {
 
         validator.validate(wallet);
 
-        UUID walletId = UUID.randomUUID();
+        DomainWallet saved = walletService.save(wallet);
 
         WalletAggregate aggregate = new WalletAggregate();
-        aggregate.createWallet(walletId, wallet.getCustomerId(), wallet.getWalletNumber(),
-                wallet.getWalletType(), wallet.getCurrency(),
-                wallet.getDailyLimit(), wallet.getMonthlyLimit());
+        aggregate.createWallet(saved.getId(), saved.getCustomerId(), saved.getWalletNumber(),
+                saved.getWalletType(), saved.getCurrency(),
+                saved.getDailyLimit(), saved.getMonthlyLimit());
 
         for (WalletEventEntry event : aggregate.getUncommittedEvents()) {
             eventStore.append(event);
         }
         aggregate.markEventsCommitted();
-
-        DomainWallet projection = toDomainWallet(aggregate);
-        DomainWallet saved = walletService.save(projection);
 
         WalletEvent kafkaEvent = new WalletEvent();
         kafkaEvent.setEventType("wallet.created");

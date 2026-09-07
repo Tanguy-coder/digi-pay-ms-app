@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import net.tanguydev.walletservice.Domain.Enums.WalletStatus;
 import net.tanguydev.walletservice.Domain.Enums.WalletType;
+import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -21,10 +22,9 @@ import java.util.UUID;
         }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class Wallet {
+public class Wallet implements Persistable<UUID> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
@@ -67,7 +67,6 @@ public class Wallet {
     @Builder.Default
     private WalletStatus status = WalletStatus.ACTIVE;
 
-    @Version
     @Column(name = "version", nullable = false)
     @Builder.Default
     private Long version = 0L;
@@ -78,10 +77,26 @@ public class Wallet {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    @Transient
+    @Builder.Default
+    private boolean isNewEntity = true;
+
+    @Override
+    public boolean isNew() {
+        return isNewEntity;
+    }
+
     @PrePersist
     protected void onCreate() {
+        if (this.id == null) this.id = UUID.randomUUID();
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = OffsetDateTime.now();
+    }
+
+    @PostLoad
+    @PostPersist
+    protected void markNotNew() {
+        this.isNewEntity = false;
     }
 
     @PreUpdate

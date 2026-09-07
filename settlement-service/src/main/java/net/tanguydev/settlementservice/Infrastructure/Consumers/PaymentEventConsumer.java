@@ -1,5 +1,6 @@
 package net.tanguydev.settlementservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryCommand;
 import net.tanguydev.settlementservice.Domain.UseCases.CaptureEntryUseCaseInterface;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@Observed(name = "settlement.payment-event.consumer")
 public class PaymentEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentEventConsumer.class);

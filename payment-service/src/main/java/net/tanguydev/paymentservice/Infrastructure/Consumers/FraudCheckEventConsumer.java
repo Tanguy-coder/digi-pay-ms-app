@@ -1,5 +1,6 @@
 package net.tanguydev.paymentservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.paymentservice.Domain.UseCases.PaymentSagaOrchestratorInterface;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -8,11 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Écoute fraud-check-events.
- * Le fraud-service y publie le verdict pour chaque paiement analysé.
- */
 @Component
+@Observed(name = "payment.fraud-check.consumer")
 public class FraudCheckEventConsumer {
 
     private final PaymentSagaOrchestratorInterface orchestrator;

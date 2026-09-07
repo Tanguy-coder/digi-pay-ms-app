@@ -30,6 +30,8 @@ spring:
       properties:
         spring.json.use.type.headers: false
         spring.json.value.default.type: java.util.HashMap
+    listener:
+      observation-enabled: true
 
 eureka:
   client:

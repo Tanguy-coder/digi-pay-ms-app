@@ -1,5 +1,6 @@
 package net.tanguydev.paymentservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.paymentservice.Domain.UseCases.PaymentSagaOrchestratorInterface;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -8,12 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Écoute le topic wallet-saga-events.
- * Le wallet-service y publie les résultats de chaque commande (DEBIT/CREDIT/COMPENSATE).
- * Pour chaque résultat, on délègue à l'orchestrateur qui décide la suite du Saga.
- */
 @Component
+@Observed(name = "payment.wallet-saga.consumer")
 public class WalletSagaEventConsumer {
 
     private final PaymentSagaOrchestratorInterface orchestrator;

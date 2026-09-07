@@ -1,5 +1,6 @@
 package net.tanguydev.fraudservice.Infrastructure.Consumers;
 
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.fraudservice.Domain.UseCases.AnalyzePaymentCommand;
 import net.tanguydev.fraudservice.Domain.UseCases.AnalyzePaymentUseCaseInterface;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -10,10 +11,8 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Écoute payment-events et déclenche l'analyse fraude sur "payment.initiated".
- */
 @Component
+@Observed(name = "fraud.payment-event.consumer")
 public class PaymentEventConsumer {
 
     private final AnalyzePaymentUseCaseInterface analyzePayment;

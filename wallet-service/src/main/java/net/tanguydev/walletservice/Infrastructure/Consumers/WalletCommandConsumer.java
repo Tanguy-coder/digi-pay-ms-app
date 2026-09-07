@@ -1,6 +1,7 @@
 package net.tanguydev.walletservice.Infrastructure.Consumers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.annotation.Observed;
 import net.tanguydev.walletservice.Domain.UseCases.CreditWalletUseCaseInterface;
 import net.tanguydev.walletservice.Domain.UseCases.DebitWalletUseCaseInterface;
 import net.tanguydev.walletservice.Infrastructure.Models.OutboxEvent;
@@ -15,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@Observed(name = "wallet.command.consumer")
 public class WalletCommandConsumer {
 
     private static final String SAGA_REPLY_TOPIC = "wallet-saga-events";
