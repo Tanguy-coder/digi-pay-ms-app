@@ -1,33 +1,33 @@
 # Digital Payment & Settlement Platform
 
-> Architecture Microservices | Event-Driven | Kafka | Fintech
+> Microservices Architecture | Event-Driven | Kafka | Fintech
 
-Plateforme de paiement electronique simulant le cycle de vie complet d'une transaction financiere : de la creation du compte client jusqu'au reglement interbancaire, en passant par la detection de fraude et les notifications en temps reel.
+Electronic payment platform simulating the complete lifecycle of a financial transaction: from customer account creation to interbank settlement, including fraud detection and real-time notifications.
 
-## Contexte
+## Context
 
 | | |
 |---|---|
-| **Domaine** | Fintech / Banking / Paiement electronique |
-| **Type** | Projet personnel — Portfolio technique senior |
-| **Niveau** | Senior / Expert |
-| **Stack principale** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
-| **Patterns cles** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker · Rate Limiting |
+| **Domain** | Fintech / Banking / Electronic Payment |
+| **Type** | Personal project — Senior technical portfolio |
+| **Level** | Senior / Expert |
+| **Main stack** | Spring Boot 4 · Kafka · PostgreSQL · Redis · Keycloak · Docker |
+| **Key patterns** | Event-Driven · CQRS · Saga · Event Sourcing · DDD · OAuth2/JWT · Circuit Breaker · Rate Limiting |
 
-**References metier** : Visa/Mastercard (clearing), Flutterwave/Paystack (paiements Afrique), Stripe (APIs), CinetPay/Wave (mobile money).
+**Business references**: Visa/Mastercard (clearing), Flutterwave/Paystack (African payments), Stripe (APIs), CinetPay/Wave (mobile money).
 
-## Fonctionnalites metier
+## Business Features
 
-- Creation et gestion de comptes clients avec processus KYC
-- Portefeuilles electroniques avec gestion des soldes et gel de fonds
-- Paiements marchands et transferts peer-to-peer avec Saga distribue
-- Idempotency garantie sur les paiements via Redis
-- Rate limiting distribue (Token Bucket) sur le gateway : 10 req/s par utilisateur JWT (ou IP), burst 20
-- Reglement interbancaire avec calcul de position nette
-- Detection de fraude en temps reel (7 regles configurables, score de risque 0-100)
-- Notifications temps reel : paiement initie, complete, echoue, fraude detectee
+- Customer account creation and management with KYC process
+- Electronic wallets with balance management and fund freezing
+- Merchant payments and peer-to-peer transfers with distributed Saga
+- Guaranteed idempotency on payments via Redis
+- Distributed rate limiting (Token Bucket) on the gateway: 10 req/s per JWT user (or IP), burst 20
+- Interbank settlement with net position calculation
+- Real-time fraud detection (7 configurable rules, risk score 0-100)
+- Real-time notifications: payment initiated, completed, failed, fraud detected
 
-## Architecture generale
+## General Architecture
 
 ```
                        [ Keycloak ]
@@ -41,153 +41,153 @@ Plateforme de paiement electronique simulant le cycle de vie complet d'une trans
        [ Fraud MS ]   [ Notify MS ]  [ Settlement MS ]
 ```
 
-**Principes** : Loose Coupling (communication par evenements) · Database per Service (H2 dev / PostgreSQL prod) · API Gateway unique · High Cohesion.
+**Principles**: Loose Coupling (event-driven communication) · Database per Service (H2 dev / PostgreSQL prod) · Single API Gateway · High Cohesion.
 
-## Microservices & Contrats d'Evenements
+## Microservices & Event Contracts
 
-| Microservice | Port | Responsabilites | Publie | Consomme |
+| Microservice | Port | Responsibilities | Publishes | Consumes |
 |---|---|---|---|---|
-| **Customer MS** | 8082 | Creation client · KYC · Infos personnelles | `customer.created` | — |
-| **Wallet MS** | 8083 | Portefeuille · Event Sourcing · Solde · Gel de fonds | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` · commandes Saga |
-| **Payment MS** | 8084 | Paiements P2P/marchands · Saga orchestration · Idempotency Redis | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | reponses Saga wallet · `fraud-check-events` |
-| **Fraud MS** | 8085 | Regles anti-fraude · Score de risque · Alertes | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
-| **Notification MS** | 8086 | Notifications en temps reel (email/SMS/push simules) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
-| **Settlement MS** | 8087 | Compensation multilaterale · Batches horaires · Net positions · Event Sourcing | `settlement.completed` `settlement.failed` | `payment.completed` |
+| **Customer MS** | 8082 | Customer creation · KYC · Personal info | `customer.created` | — |
+| **Wallet MS** | 8083 | Wallet · Event Sourcing · Balance · Fund freeze | `wallet.created` `wallet.credited` `wallet.debited` | `customer.created` · Saga commands |
+| **Payment MS** | 8084 | P2P/merchant payments · Saga orchestration · Redis idempotency | `payment.initiated` `payment.completed` `payment.failed` `payment.reversed` `payment.compensation_failed` | Saga wallet responses · `fraud-check-events` |
+| **Fraud MS** | 8085 | Anti-fraud rules · Risk score · Alerts | `fraud.cleared` `fraud.blocked` `fraud.review` | `payment.initiated` |
+| **Notification MS** | 8086 | Real-time notifications (simulated email/SMS/push) | — | `payment.initiated` `payment.completed` `payment.failed` `fraud.blocked` `fraud.review` |
+| **Settlement MS** | 8087 | Multilateral compensation · Hourly batches · Net positions · Event Sourcing | `settlement.completed` `settlement.failed` | `payment.completed` |
 
-## Configuration Kafka
+## Kafka Configuration
 
 | Topic | Consumer Group(s) | Usage |
 |---|---|---|
-| `customer-events` | wallet-group | Cycle de vie client |
-| `wallet-commands` | wallet-saga-group | Commandes Saga (DEBIT, CREDIT, COMPENSATE_DEBIT) |
-| `wallet-events` | — | Evenements wallet (created, credited, debited) |
-| `wallet-saga-events` | payment-saga-group | Reponses Saga wallet (SUCCESS, FAILURE) |
-| `payment-events` | fraud-group · notification-payment-group · settlement-group | Flux de paiement central |
-| `fraud-check-events` | payment-fraud-group · notification-fraud-group | Verdict fraude (cleared / blocked / review) |
-| `settlement-events` | — | Resultat du reglement (completed / failed) |
+| `customer-events` | wallet-group | Customer lifecycle |
+| `wallet-commands` | wallet-saga-group | Saga commands (DEBIT, CREDIT, COMPENSATE_DEBIT) |
+| `wallet-events` | — | Wallet events (created, credited, debited) |
+| `wallet-saga-events` | payment-saga-group | Wallet Saga responses (SUCCESS, FAILURE) |
+| `payment-events` | fraud-group · notification-payment-group · settlement-group | Central payment stream |
+| `fraud-check-events` | payment-fraud-group · notification-fraud-group | Fraud verdict (cleared / blocked / review) |
+| `settlement-events` | — | Settlement result (completed / failed) |
 
-## Patterns & Concepts avances
+## Advanced Patterns & Concepts
 
-| Pattern | Application dans ce projet |
+| Pattern | Application in this project |
 |---|---|
-| **Event Sourcing** | Wallet MS : l'etat du portefeuille est reconstruit depuis les evenements (table append-only `wallet_events`). Settlement MS : l'etat du batch est reconstruit depuis les evenements (`batch_events`). Le solde/statut n'est jamais modifie directement — il est calcule en rejouant les events. |
-| **Saga (Orchestration)** | Payment MS orchestrate DEBIT → FRAUD_CHECK → CREDIT → COMPLETE; compensation automatique si une etape echoue |
-| **Idempotency** | Cle d'idempotency stockee dans Redis (TTL 24h) ; doublon → HTTP 409 sans re-traitement |
-| **Clean Architecture** | Hexagonal (Ports & Adapters) : domaine pur sans dependance framework, use cases isoles |
-| **Presenter Pattern** | Interface domaine + implementation infrastructure ; le controller ne connait que le domaine |
-| **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = bounded contexts independants |
-| **CQRS** | Command Query Responsibility Segregation : controllers separes en `CommandController` (POST/PUT, @Transactional) et `QueryController` (GET, read-only). Applique sur les 6 services metier. Separation stricte lecture/ecriture au niveau API. |
-| **OAuth2 / JWT** | Securite centralisee via Keycloak (Identity Provider) et Spring Security OAuth2 Resource Server au niveau du gateway. Validation JWT (RS256) a l'entree, extraction des roles Keycloak (`realm_access.roles`) via converter custom. Les microservices en aval n'ont pas de security — ils font confiance au gateway (zero-trust perimetrique). |
-| **Outbox Pattern** | Publication Kafka via table `outbox_events` transactionnelle (meme transaction que la donnee metier). Relay polling (1s) assure at-least-once delivery sans perte d'events. Applique sur 5 services (customer, wallet, payment, fraud, settlement). |
-| **Circuit Breaker / Retry** | Resilience4j sur le `OutboxRelay` du payment-service : Retry (3 tentatives, 500ms) + Circuit Breaker (CLOSED/OPEN/HALF-OPEN). Si Kafka est indisponible, le circuit s'ouvre apres 50% d'echecs sur 10 appels, et l'event reste dans l'outbox pour etre rejoue. Protege contre les cascades de pannes. |
-| **Rate Limiting (Token Bucket)** | Spring Cloud Gateway + Redis : `RequestRateLimiter` global sur tous les routes. 10 tokens/s recharges, burst max 20. Cle = `sub` JWT si authentifie, IP sinon. HTTP 429 si seau vide. Compteurs stockes dans Redis → limite partagee entre toutes les instances gateway. |
-| **Event-Driven** | Tous les services communiquent exclusivement via Kafka ; zero appel synchrone inter-service |
+| **Event Sourcing** | Wallet MS: wallet state is rebuilt from events (append-only `wallet_events` table). Settlement MS: batch state is rebuilt from events (`batch_events`). Balance/status is never directly modified — it is computed by replaying events. |
+| **Saga (Orchestration)** | Payment MS orchestrates DEBIT → FRAUD_CHECK → CREDIT → COMPLETE; automatic compensation if a step fails |
+| **Idempotency** | Idempotency key stored in Redis (TTL 24h); duplicate → HTTP 409 without reprocessing |
+| **Clean Architecture** | Hexagonal (Ports & Adapters): pure domain with no framework dependency, isolated use cases |
+| **Presenter Pattern** | Domain interface + infrastructure implementation; the controller only knows the domain |
+| **DDD** | Customer / Wallet / Payment / Fraud / Notification / Settlement = independent bounded contexts |
+| **CQRS** | Command Query Responsibility Segregation: controllers split into `CommandController` (POST/PUT, @Transactional) and `QueryController` (GET, read-only). Applied across all 6 business services. Strict read/write separation at the API level. |
+| **OAuth2 / JWT** | Centralized security via Keycloak (Identity Provider) and Spring Security OAuth2 Resource Server at the gateway level. JWT validation (RS256) at the entry point, Keycloak role extraction (`realm_access.roles`) via custom converter. Downstream microservices have no security — they trust the gateway (perimeter zero-trust). |
+| **Outbox Pattern** | Kafka publishing via transactional `outbox_events` table (same transaction as business data). Polling relay (1s) ensures at-least-once delivery without event loss. Applied to 5 services (customer, wallet, payment, fraud, settlement). |
+| **Circuit Breaker / Retry** | Resilience4j on the payment-service `OutboxRelay`: Retry (3 attempts, 500ms) + Circuit Breaker (CLOSED/OPEN/HALF-OPEN). If Kafka is unavailable, the circuit opens after 50% failures over 10 calls, and the event stays in the outbox to be replayed. Protects against failure cascades. |
+| **Rate Limiting (Token Bucket)** | Spring Cloud Gateway + Redis: global `RequestRateLimiter` on all routes. 10 tokens/s replenished, burst max 20. Key = JWT `sub` if authenticated, IP otherwise. HTTP 429 if bucket is empty. Counters stored in Redis → shared limit across all gateway instances. |
+| **Event-Driven** | All services communicate exclusively via Kafka; zero synchronous inter-service calls |
 
-### Saga Pattern — Flux de transfert P2P avec detection fraude
+### Saga Pattern — P2P transfer flow with fraud detection
 
 ```
 Payment MS
-  1. Verifie idempotency key (Redis) → 409 si doublon
-  2. Sauvegarde paiement (INITIATED)
-  3. Publie payment.initiated sur payment-events
-  4. Demarre etape FRAUD_CHECK → paiement passe en statut FRAUD_CHECK
+  1. Checks idempotency key (Redis) → 409 if duplicate
+  2. Saves payment (INITIATED)
+  3. Publishes payment.initiated on payment-events
+  4. Starts FRAUD_CHECK step → payment moves to FRAUD_CHECK status
 
 Fraud MS
-  5. Recoit payment.initiated, evalue les 7 regles actives
-  5a. Score 0-30 → publie fraud.cleared sur fraud-check-events
-  5b. Score 31-80 → publie fraud.review
-  5c. Score > 80 ou regle BLOCK → publie fraud.blocked
+  5. Receives payment.initiated, evaluates 7 active rules
+  5a. Score 0-30 → publishes fraud.cleared on fraud-check-events
+  5b. Score 31-80 → publishes fraud.review
+  5c. Score > 80 or BLOCK rule → publishes fraud.blocked
 
 Payment MS
-  6a. (fraud.cleared) → envoie DEBIT_WALLET sur wallet-commands
-  6b. (fraud.blocked) → paiement FAILED, fin
+  6a. (fraud.cleared) → sends DEBIT_WALLET on wallet-commands
+  6b. (fraud.blocked) → payment FAILED, end
 
 Wallet MS
-  7a. Debit Alice reussi → publie DEBIT_SUCCESS
-  7b. Debit Alice echoue → publie DEBIT_FAILED
+  7a. Alice debit succeeded → publishes DEBIT_SUCCESS
+  7b. Alice debit failed → publishes DEBIT_FAILED
 
 Payment MS
-  8a. (succes) → CREDIT_WALLET vers Bob
-  8b. (echec) → paiement FAILED
+  8a. (success) → CREDIT_WALLET to Bob
+  8b. (failure) → payment FAILED
 
 Wallet MS
-  9a. Credit Bob reussi → publie CREDIT_SUCCESS → paiement COMPLETED
-  9b. Credit Bob echoue → publie CREDIT_FAILED → COMPENSATE_DEBIT → paiement REVERSED
-  9c. Si compensation echoue → paiement COMPENSATION_FAILED
+  9a. Bob credit succeeded → publishes CREDIT_SUCCESS → payment COMPLETED
+  9b. Bob credit failed → publishes CREDIT_FAILED → COMPENSATE_DEBIT → payment REVERSED
+  9c. If compensation fails → payment COMPENSATION_FAILED
 
 Notification MS
-  (en parallele) Recoit payment.initiated / completed / failed / fraud.blocked
-  → sauvegarde la notification en base avec statut SENT
+  (in parallel) Receives payment.initiated / completed / failed / fraud.blocked
+  → saves notification to database with status SENT
 
 Settlement MS
-  10. Recoit payment.completed sur payment-events (group: settlement-group)
-  11. Verifie idempotency (paymentId deja traite → skip)
-  12. Capture l'entry dans le batch ouvert (Event Sourcing)
-  13. Scheduler horaire : close batch → calculate net positions → apply settlement → complete
-  14. Publie settlement.completed sur settlement-events
+  10. Receives payment.completed on payment-events (group: settlement-group)
+  11. Checks idempotency (paymentId already processed → skip)
+  12. Captures the entry in the open batch (Event Sourcing)
+  13. Hourly scheduler: close batch → calculate net positions → apply settlement → complete
+  14. Publishes settlement.completed on settlement-events
 ```
 
-## Regles de detection de fraude
+## Fraud Detection Rules
 
-| Code | Condition | Score | Action | Priorite |
+| Code | Condition | Score | Action | Priority |
 |---|---|---|---|---|
-| `HIGH_AMOUNT` | Montant > 10 000 | 85 | BLOCK | CRITICAL |
-| `VELOCITY_1MIN` | >= 3 tx / minute / compte | 40 | REVIEW | HIGH |
-| `VELOCITY_1H` | >= 10 tx / heure / compte | 25 | FLAG | MEDIUM |
-| `RISKY_COUNTRY_KP` | Pays = KP (Coree du Nord) | 90 | BLOCK | CRITICAL |
-| `RISKY_COUNTRY_IR` | Pays = IR (Iran) | 90 | BLOCK | CRITICAL |
-| `NEW_DEVICE` | Nouveau device (non reconnu) | 20 | CHALLENGE_OTP | MEDIUM |
-| `SUSPICIOUS_HOUR` | Heure entre 0h-5h UTC | 15 | FLAG | LOW |
+| `HIGH_AMOUNT` | Amount > 10,000 | 85 | BLOCK | CRITICAL |
+| `VELOCITY_1MIN` | >= 3 tx / minute / account | 40 | REVIEW | HIGH |
+| `VELOCITY_1H` | >= 10 tx / hour / account | 25 | FLAG | MEDIUM |
+| `RISKY_COUNTRY_KP` | Country = KP (North Korea) | 90 | BLOCK | CRITICAL |
+| `RISKY_COUNTRY_IR` | Country = IR (Iran) | 90 | BLOCK | CRITICAL |
+| `NEW_DEVICE` | New device (unrecognized) | 20 | CHALLENGE_OTP | MEDIUM |
+| `SUSPICIOUS_HOUR` | Hour between 0am-5am UTC | 15 | FLAG | LOW |
 
-**Score → Verdict** : 0-30 = CLEARED · 31-60 = REVIEW · 61-80 = FLAGGED · 81-100 = BLOCKED
+**Score → Verdict**: 0-30 = CLEARED · 31-60 = REVIEW · 61-80 = FLAGGED · 81-100 = BLOCKED
 
-## Stack technique
+## Tech Stack
 
-| Domaine | Technologie |
+| Domain | Technology |
 |---|---|
 | Backend | Spring Boot 4.1.0 (Java 21) |
 | Messaging | Apache Kafka 3.9+ (KRaft mode) |
-| Base de donnees | PostgreSQL 16 (prod) · H2 in-memory (dev/test) |
+| Database | PostgreSQL 16 (prod) · H2 in-memory (dev/test) |
 | Cache / Idempotency | Redis 7 |
-| Mapping objets | MapStruct 1.5.5 |
+| Object mapping | MapStruct 1.5.5 |
 | Tests | JUnit 5, Mockito, @WebMvcTest, Testcontainers |
-| Conteneurisation | Docker + Docker Compose |
+| Containerization | Docker + Docker Compose |
 | Service Discovery | Spring Cloud Netflix Eureka |
-| API Gateway | Spring Cloud Gateway (reactive, route dynamique via Eureka) |
-| Securite | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
-| Observabilite | Prometheus · Grafana · Micrometer (metriques temps reel) · Jaeger + OpenTelemetry (tracing distribue) |
-| Resilience | Resilience4j (Circuit Breaker + Retry sur publication Kafka) |
-| Rate Limiting | Redis 7 + Spring Cloud Gateway `RequestRateLimiter` (Token Bucket, 10 req/s par utilisateur) |
+| API Gateway | Spring Cloud Gateway (reactive, dynamic routing via Eureka) |
+| Security | Keycloak 26 (OIDC / OAuth2) + Spring Security Resource Server (JWT RS256) |
+| Observability | Prometheus · Grafana · Micrometer (real-time metrics) · Jaeger + OpenTelemetry (distributed tracing) |
+| Resilience | Resilience4j (Circuit Breaker + Retry on Kafka publishing) |
+| Rate Limiting | Redis 7 + Spring Cloud Gateway `RequestRateLimiter` (Token Bucket, 10 req/s per user) |
 
-## Architecture logicielle (par service)
+## Software Architecture (per service)
 
-Chaque microservice suit une **architecture hexagonale** (Clean Architecture / Ports & Adapters) avec SRP strict :
+Each microservice follows a **hexagonal architecture** (Clean Architecture / Ports & Adapters) with strict SRP:
 
 ```
 service/
-├── Domain/                          # Coeur metier (zero dependance framework)
-│   ├── Aggregates/                  # Event-sourced aggregates (ex: WalletAggregate)
-│   ├── Entities/                    # Entites metier pures
-│   ├── Enums/                       # Enumerations du domaine
-│   ├── Events/                      # Evenements domaine (WalletEventEntry, WalletEvent)
-│   ├── Ports/                       # Interfaces de persistance / publication / event store
-│   ├── Presenters/                  # Interface de presentation (1 classe = 1 responsabilite)
-│   ├── Responses/                   # DTOs de sortie (1 fichier = 1 DTO)
+├── Domain/                          # Business core (zero framework dependency)
+│   ├── Aggregates/                  # Event-sourced aggregates (e.g. WalletAggregate)
+│   ├── Entities/                    # Pure business entities
+│   ├── Enums/                       # Domain enumerations
+│   ├── Events/                      # Domain events (WalletEventEntry, WalletEvent)
+│   ├── Ports/                       # Persistence / publishing / event store interfaces
+│   ├── Presenters/                  # Presentation interface (1 class = 1 responsibility)
+│   ├── Responses/                   # Output DTOs (1 file = 1 DTO)
 │   └── UseCases/                    # Command + Interface + Implementation
 │
-└── Infrastructure/                  # Adaptateurs techniques
-    ├── Config/                      # DomainConfig (beans use cases) + PresentationConfig (presenter)
+└── Infrastructure/                  # Technical adapters
+    ├── Config/                      # DomainConfig (use case beans) + PresentationConfig (presenter)
     ├── Consumers/                   # Kafka consumers
-    ├── Controllers/                 # API REST (CQRS : CommandController + QueryController)
-    ├── EventStore/                  # Event Store PostgreSQL (append-only, table wallet_events)
-    ├── Mappers/                     # MapStruct : Domain <-> JPA <-> Response
-    ├── Models/                      # Entites JPA (projection / read model / OutboxEvent)
-    ├── Presenters/                  # Implementation des interfaces presenter
-    ├── Repositories/                # JpaRepository + adaptateur hexagonal
+    ├── Controllers/                 # REST API (CQRS: CommandController + QueryController)
+    ├── EventStore/                  # PostgreSQL Event Store (append-only, wallet_events table)
+    ├── Mappers/                     # MapStruct: Domain <-> JPA <-> Response
+    ├── Models/                      # JPA entities (projection / read model / OutboxEvent)
+    ├── Presenters/                  # Presenter interface implementations
+    ├── Repositories/                # JpaRepository + hexagonal adapter
     └── Schedulers/                  # OutboxRelay (polling 1s) + BatchScheduler (settlement)
 ```
 
-## Structure du repository
+## Repository Structure
 
 ```
 digi-pay-ms-app/
@@ -199,33 +199,33 @@ digi-pay-ms-app/
 ├── settlement-service/       → Settlement MS   (port 8087)
 ├── discovery-service/        → Eureka Server   (port 8761)
 ├── gateway-service/          → API Gateway     (port 8888)
-├── keycloak/                 → Realm export (auto-import au boot)
-├── docker-compose.yaml       → Keycloak + Kafka + Redis + 8 services applicatifs
-├── e2e-fraud.sh              → Scenarios E2E fraud detection
-├── e2e-settlement.sh         → Scenarios E2E settlement
-├── e2e-gateway.sh            → Scenarios E2E gateway routing
+├── keycloak/                 → Realm export (auto-import on boot)
+├── docker-compose.yaml       → Keycloak + Kafka + Redis + 8 application services
+├── e2e-fraud.sh              → E2E fraud detection scenarios
+├── e2e-settlement.sh         → E2E settlement scenarios
+├── e2e-gateway.sh            → E2E gateway routing scenarios
 └── README.md
 ```
 
-## Demarrage rapide
+## Quick Start
 
-### Prerequis
+### Prerequisites
 
 - Java 21+
 - Maven 3.9+
 - Docker + jq
 
-### Tout demarrer via Docker Compose
+### Start everything with Docker Compose
 
 ```bash
-# Build et demarrage de tous les services
+# Build and start all services
 docker compose up --build -d
 ```
 
-### Obtenir un token JWT (Keycloak)
+### Get a JWT token (Keycloak)
 
 ```bash
-# Obtenir un token pour l'utilisateur user1 (role USER)
+# Get a token for user1 (USER role)
 TOKEN=$(curl -s -X POST http://localhost:8080/realms/digipay/protocol/openid-connect/token \
   -d "grant_type=password" \
   -d "client_id=digipay-gateway" \
@@ -233,17 +233,17 @@ TOKEN=$(curl -s -X POST http://localhost:8080/realms/digipay/protocol/openid-con
   -d "username=user1" \
   -d "password=password" | jq -r '.access_token')
 
-# Appeler un service via le gateway avec le token
+# Call a service via the gateway with the token
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8888/customer-service/api/v1/customers
 ```
 
-Utilisateurs pre-configures :
+Pre-configured users:
 | Username | Password | Roles |
 |---|---|---|
 | `user1` | `password` | USER |
 | `admin1` | `password` | USER, ADMIN |
 
-### Demarrage local (developpement)
+### Local start (development)
 
 ```bash
 # 1. Infrastructure
@@ -253,7 +253,7 @@ docker compose up kafka redis keycloak keycloak-db -d
 cd discovery-service && ./mvnw spring-boot:run
 cd gateway-service   && ./mvnw spring-boot:run
 
-# 3. Services metier (un terminal par service)
+# 3. Business services (one terminal per service)
 cd customer-service      && ./mvnw spring-boot:run
 cd wallet-service        && ./mvnw spring-boot:run
 cd payment-service       && ./mvnw spring-boot:run
@@ -262,9 +262,9 @@ cd notification-service  && ./mvnw spring-boot:run
 cd settlement-service    && ./mvnw spring-boot:run
 ```
 
-## Scenarios E2E
+## E2E Scenarios
 
-### Flux de base P2P
+### Basic P2P flow
 
 ```bash
 SUFFIX=$(date +%s)
@@ -318,71 +318,71 @@ curl -s -X POST http://localhost:8084/api/v1/payments \
   }" | jq '{id, status}'
 ```
 
-### Script E2E complet (fraud detection)
+### Full E2E script (fraud detection)
 
 ```bash
 chmod +x e2e-fraud.sh && ./e2e-fraud.sh
 ```
 
-Scenarios couverts :
-- **Scenario 1** : paiement 100 EUR → verdict `CLEARED`
-- **Scenario 2** : paiement 15 000 EUR → verdict `BLOCKED` (regle `HIGH_AMOUNT`)
-- **Scenario 3** : 3+ paiements rapides → verdict `REVIEW` (regle `VELOCITY_1MIN`)
-- **Scenario 4** : historique fraud analyses par wallet
+Covered scenarios:
+- **Scenario 1**: 100 EUR payment → verdict `CLEARED`
+- **Scenario 2**: 15,000 EUR payment → verdict `BLOCKED` (`HIGH_AMOUNT` rule)
+- **Scenario 3**: 3+ rapid payments → verdict `REVIEW` (`VELOCITY_1MIN` rule)
+- **Scenario 4**: fraud analysis history by wallet
 
-### Script E2E complet (settlement)
+### Full E2E script (settlement)
 
 ```bash
 chmod +x e2e-settlement.sh && ./e2e-settlement.sh
 ```
 
-Scenarios couverts :
-- **Scenario 1** : paiement completed → entry capturee dans le batch ouvert
-- **Scenario 2** : consultation du batch courant + entries + positions nettes
-- **Scenario 3** : fermeture manuelle du batch → calcul positions
-- **Scenario 4** : idempotency — meme paiement ne cree pas de doublon entry
+Covered scenarios:
+- **Scenario 1**: completed payment → entry captured in open batch
+- **Scenario 2**: view current batch + entries + net positions
+- **Scenario 3**: manual batch close → position calculation
+- **Scenario 4**: idempotency — same payment does not create duplicate entry
 
-### Scenarios de test valides
+### Validated test scenarios
 
-| Scenario | Attendu |
+| Scenario | Expected |
 |---|---|
-| Transfert normal | fraud verdict `CLEARED`, paiement `COMPLETED` |
-| Montant > 10 000 | fraud verdict `BLOCKED`, paiement `FAILED` |
-| > 5 tx / minute | fraud verdict `REVIEW`, risque eleve |
-| Meme `idempotencyKey` rejoue | HTTP `409 Conflict` |
-| Solde insuffisant | paiement `FAILED`, balance inchangee |
+| Normal transfer | fraud verdict `CLEARED`, payment `COMPLETED` |
+| Amount > 10,000 | fraud verdict `BLOCKED`, payment `FAILED` |
+| > 5 tx / minute | fraud verdict `REVIEW`, high risk |
+| Same `idempotencyKey` replayed | HTTP `409 Conflict` |
+| Insufficient balance | payment `FAILED`, balance unchanged |
 
-## Endpoints API
+## API Endpoints
 
 ### Customer Service (port 8082)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| POST | `/api/v1/customers` | Creer un client |
-| GET | `/api/v1/customers` | Lister les clients |
-| GET | `/api/v1/customers/{id}` | Trouver par UUID |
-| PUT | `/api/v1/customers/{id}` | Mettre a jour |
+| POST | `/api/v1/customers` | Create a customer |
+| GET | `/api/v1/customers` | List customers |
+| GET | `/api/v1/customers/{id}` | Find by UUID |
+| PUT | `/api/v1/customers/{id}` | Update |
 
 ### Wallet Service (port 8083)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| GET | `/api/v1/wallets/{id}` | Trouver par UUID |
-| GET | `/api/v1/wallets/customer/{customerId}` | Trouver par UUID client |
-| GET | `/api/v1/wallets/{id}/history` | Historique complet des operations (Event Sourcing) |
-| POST | `/api/v1/wallets/{id}/credit?amount=X` | Crediter |
-| POST | `/api/v1/wallets/{id}/debit?amount=X` | Debiter |
-| POST | `/api/v1/wallets/{id}/freeze?amount=X` | Geler |
+| GET | `/api/v1/wallets/{id}` | Find by UUID |
+| GET | `/api/v1/wallets/customer/{customerId}` | Find by customer UUID |
+| GET | `/api/v1/wallets/{id}/history` | Full operation history (Event Sourcing) |
+| POST | `/api/v1/wallets/{id}/credit?amount=X` | Credit |
+| POST | `/api/v1/wallets/{id}/debit?amount=X` | Debit |
+| POST | `/api/v1/wallets/{id}/freeze?amount=X` | Freeze |
 
 ### Payment Service (port 8084)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| POST | `/api/v1/payments` | Initier un paiement (Saga + idempotency) |
-| GET | `/api/v1/payments/{id}` | Consulter par UUID |
-| GET | `/api/v1/payments/wallet/{walletId}` | Historique par wallet |
+| POST | `/api/v1/payments` | Initiate a payment (Saga + idempotency) |
+| GET | `/api/v1/payments/{id}` | Get by UUID |
+| GET | `/api/v1/payments/wallet/{walletId}` | History by wallet |
 
-Corps de la requete POST :
+POST request body:
 
 ```json
 {
@@ -395,44 +395,44 @@ Corps de la requete POST :
 }
 ```
 
-Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
+Available types: `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 
 ### Fraud Service (port 8085)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| GET | `/api/v1/fraud-analyses/{paymentId}` | Analyse fraude par paiement |
-| GET | `/api/v1/fraud-analyses/customer/{customerId}` | Historique fraude par client |
+| GET | `/api/v1/fraud-analyses/{paymentId}` | Fraud analysis by payment |
+| GET | `/api/v1/fraud-analyses/customer/{customerId}` | Fraud history by customer |
 
 ### Notification Service (port 8086)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| GET | `/api/v1/notifications/wallet/{walletId}` | Notifications par wallet |
-| GET | `/api/v1/notifications/payment/{paymentId}` | Notifications par paiement |
+| GET | `/api/v1/notifications/wallet/{walletId}` | Notifications by wallet |
+| GET | `/api/v1/notifications/payment/{paymentId}` | Notifications by payment |
 
 ### Settlement Service (port 8087)
 
-| Methode | URL | Description |
+| Method | URL | Description |
 |---|---|---|
-| GET | `/api/settlements/batches` | Lister tous les batches |
-| GET | `/api/settlements/batches/current?currency=XAF` | Batch ouvert en cours |
-| GET | `/api/settlements/batches/{id}` | Consulter un batch par UUID |
-| GET | `/api/settlements/batches/{id}/entries` | Entries (paiements captures) du batch |
-| GET | `/api/settlements/batches/{id}/positions` | Positions nettes du batch |
-| POST | `/api/settlements/batches/open` | Ouvrir un batch manuellement |
-| POST | `/api/settlements/batches/{id}/close` | Fermer un batch manuellement |
+| GET | `/api/settlements/batches` | List all batches |
+| GET | `/api/settlements/batches/current?currency=XAF` | Current open batch |
+| GET | `/api/settlements/batches/{id}` | Get batch by UUID |
+| GET | `/api/settlements/batches/{id}/entries` | Batch entries (captured payments) |
+| GET | `/api/settlements/batches/{id}/positions` | Batch net positions |
+| POST | `/api/settlements/batches/open` | Manually open a batch |
+| POST | `/api/settlements/batches/{id}/close` | Manually close a batch |
 
 ### Discovery, Gateway & Security
 
 | Service | Port | Description |
 |---|---|---|
 | Eureka Server | 8761 | Service registry (dashboard: http://localhost:8761) |
-| API Gateway | 8888 | Point d'entree unique, routage dynamique via Eureka, validation JWT, rate limiting Redis |
+| API Gateway | 8888 | Single entry point, dynamic routing via Eureka, JWT validation, Redis rate limiting |
 | Keycloak | 8080 | Identity Provider (OIDC), realm `digipay`, roles USER/ADMIN |
-| Jaeger | 16686 | Tracing distribue — traces OpenTelemetry de tous les services |
+| Jaeger | 16686 | Distributed tracing — OpenTelemetry traces from all services |
 
-### URLs utiles
+### Useful URLs
 
 | Service | URL |
 |---|---|
@@ -450,7 +450,7 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3000 (admin / admin) |
 
-## Communication Kafka entre services
+## Kafka Communication Between Services
 
 ```
  ┌──────────────────┐
@@ -530,7 +530,7 @@ Types disponibles : `P2P`, `MERCHANT`, `BILL`, `WITHDRAWAL`, `DEPOSIT`
 ## Tests
 
 ```bash
-# Lancer tous les tests d'un service
+# Run all tests for a service
 cd customer-service      && ./mvnw test
 cd wallet-service        && ./mvnw test
 cd payment-service       && ./mvnw test
@@ -539,45 +539,45 @@ cd notification-service  && ./mvnw test
 cd settlement-service    && ./mvnw test
 ```
 
-| Service | Tests | Couverture |
+| Service | Tests | Coverage |
 |---|---|---|
 | customer-service | 18 | Use cases (create, find, update) + CommandController (2) + QueryController (2) + Integration (1) |
-| wallet-service | 32 | WalletAggregate (8) + Use cases event-sourced (14) + CommandController (5) + QueryController (2) + History (2) + Integration (1) |
+| wallet-service | 32 | WalletAggregate (8) + Event-sourced use cases (14) + CommandController (5) + QueryController (2) + History (2) + Integration (1) |
 | payment-service | 24 | Use cases (3) + Saga (7) + Find (4) + CommandController (3) + QueryController (3) + CircuitBreaker (3) + Integration (1) |
 | fraud-service | 24 | FraudRulesEngine (13) + AnalyzePaymentUseCase (5) + QueryController (5) + ApplicationContext (1) |
 | notification-service | 12 | SendNotificationUseCase (6) + QueryController (5) + ApplicationContext (1) |
 | settlement-service | 31 | SettlementBatchAggregate (12) + Use cases (9) + CommandController (1) + QueryController (4) + Consumer (4) + ApplicationContext (1) |
-| gateway-service | 7 | SecurityConfig (actuator public, 401 sans token, JWT mock autorise, register public) + ApplicationContext (1) + RateLimiterConfig (bean present, anonymous → IP) |
+| gateway-service | 7 | SecurityConfig (actuator public, 401 without token, mock JWT authorized, register public) + ApplicationContext (1) + RateLimiterConfig (bean present, anonymous → IP) |
 | **Total** | **148** | |
 
 ## Roadmap
 
-| Phase | Livrables | Statut |
+| Phase | Deliverables | Status |
 |---|---|---|
-| Phase 1 | Infrastructure Docker + Kafka | Termine |
-| Phase 2 | Customer MS + Wallet MS + Kafka events + Tests | Termine |
-| Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + Tests E2E | Termine |
-| Phase 4 | Fraud Detection MS + Notification MS | Termine |
-| Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Termine |
-| Phase 6 | Settlement MS v1 (compensation simple, position nette) | Termine |
-| Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Termine |
-| Phase 8 | Settlement MS v2 : compensation multilaterale, batches horaires, Event Sourcing, scheduler, 31 tests | Termine |
-| Phase 9 | Outbox Pattern (garantie transactionnelle DB → Kafka, at-least-once, 5 services) | Termine |
-| Phase 10 | CQRS (controllers Command/Query separes, 6 services) | Termine |
-| Phase 11 | Securite JWT/Keycloak via API Gateway (OAuth2 Resource Server, realm auto-import, 5 tests) | Termine |
-| Phase 12a | Observabilite : Prometheus + Grafana (metriques temps reel, 8 services scraped, dashboards) | Termine |
-| Phase 12b | Resilience : Circuit Breaker + Retry Resilience4j sur OutboxRelay (3 tests) | Termine |
-| Phase 12c | Tracing distribue : OpenTelemetry + Jaeger (trace IDs propagés sur 8 services, OTLP) | Termine |
-| Phase 12d | RFC 7807 Problem Details : format d'erreur standardise sur les 6 services metier | Termine |
-| Phase 12e | Migration PostgreSQL : 5 services metier (Flyway, profils dev/prod, schema versione) | Termine |
-| Phase 12f | Rate Limiting distribue : Token Bucket Redis sur le gateway (10 req/s, JWT sub ou IP, HTTP 429) | Termine |
-| Phase 13 | OpenAPI / Swagger : documentation automatique des APIs | A venir |
+| Phase 1 | Docker + Kafka infrastructure | Done |
+| Phase 2 | Customer MS + Wallet MS + Kafka events + Tests | Done |
+| Phase 3 | Payment MS + Saga Pattern + Redis Idempotency + E2E Tests | Done |
+| Phase 4 | Fraud Detection MS + Notification MS | Done |
+| Phase 5 | Discovery Service (Eureka) + API Gateway (Spring Cloud Gateway) | Done |
+| Phase 6 | Settlement MS v1 (simple compensation, net position) | Done |
+| Phase 7 | Event Sourcing (Wallet MS + Settlement MS rewrite) + CI/CD GitLab | Done |
+| Phase 8 | Settlement MS v2: multilateral compensation, hourly batches, Event Sourcing, scheduler, 31 tests | Done |
+| Phase 9 | Outbox Pattern (transactional DB → Kafka guarantee, at-least-once, 5 services) | Done |
+| Phase 10 | CQRS (separate Command/Query controllers, 6 services) | Done |
+| Phase 11 | JWT/Keycloak security via API Gateway (OAuth2 Resource Server, auto-import realm, 5 tests) | Done |
+| Phase 12a | Observability: Prometheus + Grafana (real-time metrics, 8 services scraped, dashboards) | Done |
+| Phase 12b | Resilience: Circuit Breaker + Retry Resilience4j on OutboxRelay (3 tests) | Done |
+| Phase 12c | Distributed tracing: OpenTelemetry + Jaeger (trace IDs propagated across 8 services, OTLP) | Done |
+| Phase 12d | RFC 7807 Problem Details: standardized error format across 6 business services | Done |
+| Phase 12e | PostgreSQL migration: 5 business services (Flyway, dev/prod profiles, versioned schema) | Done |
+| Phase 12f | Distributed rate limiting: Token Bucket Redis on gateway (10 req/s, JWT sub or IP, HTTP 429) | Done |
+| Phase 13 | OpenAPI / Swagger: automatic API documentation | Upcoming |
 
-## Approfondissements prevus (Senior+)
+## Planned Deep-Dives
 
 - Exactly-Once Semantics Kafka (`isolation.level = read_committed`)
-- Migration Outbox relay → Debezium CDC (capture WAL PostgreSQL, zero polling)
-- GDPR Compliance (chiffrement PII, droit a l'oubli dans les topics)
-- gRPC entre services (queries synchrones haute-performance)
+- Outbox relay migration → Debezium CDC (PostgreSQL WAL capture, zero polling)
+- GDPR Compliance (PII encryption, right to be forgotten in topics)
+- gRPC between services (high-performance synchronous queries)
 - Kubernetes (Helm charts, HPA, PodDisruptionBudget)
-- PCI-DSS basics (tokenisation donnees carte, audit logs immuables)
+- PCI-DSS basics (card data tokenization, immutable audit logs)
